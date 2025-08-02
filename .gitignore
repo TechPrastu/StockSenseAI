@@ -25,3 +25,8 @@ Thumbs.db
 # OS generated
 ehthumbs.db
 Icon?
+
+# Ignore trained model files and model directory
+models/
+*.pkl
+*.joblib

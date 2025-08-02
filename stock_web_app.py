@@ -2,9 +2,13 @@ from flask import Flask, render_template, request, jsonify
 import yfinance as yf
 from nsetools import Nse
 import pandas as pd
+from ai.predictor import StockPredictor
+from ai.logger import StockSenseAILogger
 
 app = Flask(__name__)
 nse = Nse()
+stock_predictor = StockPredictor()
+logger = StockSenseAILogger.get_logger(__name__)
 
 def get_stock_data(symbol, period='7d', table_period='7d'):
     yf_symbol = symbol.upper() + '.NS'
@@ -70,11 +74,23 @@ def index():
     symbols = symbols.split(",")
     stock_data_list = [get_stock_data(s, period=selected_period, table_period='7d') for s in symbols]
 
-    return render_template("index.html",
-                           symbols=",".join(symbols),
-                           selected_period=selected_period,
-                           theme=theme,
-                           stock_data_list=stock_data_list)
+    # AI Prediction
+    predictions = {}
+    insights_dict = {}
+    for symbol in symbols:
+        stock_predictor.train(symbol)
+        predictions[symbol] = stock_predictor.predict(symbol)
+        insights_dict[symbol] = stock_predictor.get_insights(symbol)
+
+    return render_template(
+        "index.html",
+        symbols=",".join(symbols),
+        selected_period=selected_period,
+        theme=theme,
+        stock_data_list=stock_data_list,
+        predictions=predictions,
+        insights=insights_dict
+    )
 
 @app.route("/table")
 def table():
@@ -84,5 +100,13 @@ def table():
     stock = get_stock_data(symbol, period)
     return stock["hist_table"]
 
+@app.before_request
+def log_request_info():
+    logger.info(f"User requested data for {request.args.get('symbol')}")
+    logger.debug(f"Request data: {request.args}")
+
 if __name__ == "__main__":
     app.run(debug=True)
+# stock_web_app.py
+# This file is part of the StockSense AI project.
+# It provides a Flask web application to display stock data and predictions.    
