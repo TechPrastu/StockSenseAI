@@ -17,11 +17,10 @@
             <input type="text" name="symbol" value="{{ symbols }}" required>
 
             <label for="period">Select Time Range:</label>
-            
-            
-            
-            
-            <option value="1y" {% if selected_period=='1y' %}selected{% endif %}>1 Year</option>
+            <select name="period">
+                <option value="7d" {% if selected_period=='7d' %}selected{% endif %}>1 Week</option>
+                <option value="1mo" {% if selected_period=='1mo' %}selected{% endif %}>1 Month</option>
+                <option value="1y" {% if selected_period=='1y' %}selected{% endif %}>1 Year</option>
             </select>
 
             <label for="theme">Theme:</label>
@@ -45,6 +44,13 @@
                 <li><b>Sector:</b> {{ stock.yfinance_fields['Sector'] }}</li>
                 <li><b>Website:</b> <a href="{{ stock.yfinance_fields['Website'] }}" target="_blank">{{ stock.yfinance_fields['Website'] }}</a></li>
             </ul>
+            <p><strong>AI Predicted Next Close:</strong>
+                {% if predictions[stock.symbol] is defined %}
+                    {{ predictions[stock.symbol]|round(2) }}
+                {% else %}
+                    Not available
+                {% endif %}
+            </p>
             <h3>📊 Price & Volume Chart</h3>
             <div id="plotly-chart-{{ stock.symbol }}"></div>
             <script>
@@ -97,6 +103,29 @@
                 <div id="table-container-{{ stock.symbol }}">
                     {{ stock.hist_table | safe }}
                 </div>
+            </div>
+            <div class="ai-insights">
+                <h3>AI Insights</h3>
+                <ul>
+                    <li><b>Breakout Confirmation:</b> {{ insights[stock.symbol].breakout_confirmation }}</li>
+                    <li><b>Breakout Prediction:</b> {{ insights[stock.symbol].breakout_prediction }}</li>
+                    <li><b>Near Breakout:</b> {{ insights[stock.symbol].near_breakout }}</li>
+                    <li><b>Direction:</b> {{ insights[stock.symbol].direction }} {{ insights[stock.symbol].direction_symbol }}</li>
+                    <li><b>Forecast:</b> {{ insights[stock.symbol].forecast }}</li>
+                    <li><b>Chart Pattern:</b> {{ insights[stock.symbol].chart_pattern }}</li>
+                </ul>
+                <h4>Latest News</h4>
+                <ul>
+                    {% for news in insights[stock.symbol].news %}
+                        <li><b>{{ news.title }}</b>: {{ news.summary }}</li>
+                    {% endfor %}
+                </ul>
+                <h4>Upcoming Events</h4>
+                <ul>
+                    {% for event in insights[stock.symbol].events %}
+                        <li>{{ event.event }} on {{ event.date }}</li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
         {% endfor %}
