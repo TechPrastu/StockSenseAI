@@ -1,8 +1,3 @@
----
-
-### ✅ `README.md`
-
-````markdown
 # 📈 Indian Stock Dashboard
 
 A Flask-based stock dashboard for Indian stocks (NSE), built using Yahoo Finance and NSE Tools APIs.  
@@ -102,9 +97,6 @@ Then visit `http://127.0.0.1:5000/` in your browser.
 ---
 
 ## 📝 License
-
-MIT License
-
 ```
-
----
+Not Yet
+```
