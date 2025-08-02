@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stock Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="{{ theme }}">
+    <div>
+        <h1>📈 Indian Stock Dashboard</h1>
+
+        <form method="POST" class="form" id="dashboard-form">
+            <label for="symbol">Stock Symbols (comma-separated):</label>
+            <input type="text" name="symbol" value="{{ symbols }}" required>
+
+            <label for="period">Select Time Range:</label>
+            
+            
+            
+            
+            <option value="1y" {% if selected_period=='1y' %}selected{% endif %}>1 Year</option>
+            </select>
+
+            <label for="theme">Theme:</label>
+            <select name="theme" onchange="document.getElementById('dashboard-form').submit();">
+                <option value="light" {% if theme=='light' %}selected{% endif %}>Light</option>
+                <option value="dark" {% if theme=='dark' %}selected{% endif %}>Dark</option>
+            </select>
+        </form>
+
+        {% for stock in stock_data_list %}
+        <div class="card">
+            <h2>{{ stock.symbol }}</h2>
+            <h3>Yahoo Finance Data</h3>
+            <ul>
+                <li><b>Current Price:</b> {{ stock.yfinance_fields['Current Price'] }}</li>
+                <li><b>Previous Close:</b> {{ stock.yfinance_fields['Previous Close'] }}</li>
+                <li><b>52 Week High:</b> {{ stock.yfinance_fields['52 Week High'] }}</li>
+                <li><b>52 Week Low:</b> {{ stock.yfinance_fields['52 Week Low'] }}</li>
+                <li><b>Market Cap:</b> {{ stock.yfinance_fields['Market Cap'] }}</li>
+                <li><b>P/E Ratio:</b> {{ stock.yfinance_fields['P/E Ratio'] }}</li>
+                <li><b>Sector:</b> {{ stock.yfinance_fields['Sector'] }}</li>
+                <li><b>Website:</b> <a href="{{ stock.yfinance_fields['Website'] }}" target="_blank">{{ stock.yfinance_fields['Website'] }}</a></li>
+            </ul>
+            <h3>📊 Price & Volume Chart</h3>
+            <div id="plotly-chart-{{ stock.symbol }}"></div>
+            <script>
+                const histData_{{ stock.symbol }} = {{ stock.hist_json|tojson }};
+                const dates_{{ stock.symbol }} = histData_{{ stock.symbol }}.map(row => row.Date);
+                const close_{{ stock.symbol }} = histData_{{ stock.symbol }}.map(row => row.Close);
+                const volume_{{ stock.symbol }} = histData_{{ stock.symbol }}.map(row => row.Volume);
+
+                const tracePrice_{{ stock.symbol }} = {
+                    x: dates_{{ stock.symbol }},
+                    y: close_{{ stock.symbol }},
+                    type: 'scatter',
+                    name: '{{ stock.symbol }} Close Price',
+                    yaxis: 'y1',
+                    line: { color: '#00b894', width: 3 }
+                };
+
+                const traceVolume_{{ stock.symbol }} = {
+                    x: dates_{{ stock.symbol }},
+                    y: volume_{{ stock.symbol }},
+                    type: 'bar',
+                    name: 'Volume',
+                    yaxis: 'y2',
+                    marker: { color: 'rgba(0,184,148,0.2)' }
+                };
+
+                const layout_{{ stock.symbol }} = {
+                    yaxis: { title: 'Price', side: 'left' },
+                    yaxis2: {
+                        title: 'Volume',
+                        overlaying: 'y',
+                        side: 'right',
+                        showgrid: false
+                    },
+                    legend: { x: 0, y: 1.2, orientation: 'h' },
+                    margin: { t: 40 }
+                };
+
+                Plotly.newPlot('plotly-chart-{{ stock.symbol }}', [tracePrice_{{ stock.symbol }}, traceVolume_{{ stock.symbol }}], layout_{{ stock.symbol }}, {responsive: true});
+            </script>
+            <div class="section">
+                <div class="subform">
+                    <label for="table-period-{{ stock.symbol }}">View Historical Table:</label>
+                    <select id="table-period-{{ stock.symbol }}" onchange="updateTable('{{ stock.symbol }}', this.value)">
+                        <option value="7d" selected>1 Week</option>
+                        <option value="1mo">1 Month</option>
+                        <option value="1y">1 Year</option>
+                    </select>
+                </div>
+                <div id="table-container-{{ stock.symbol }}">
+                    {{ stock.hist_table | safe }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        function updateTable(symbol, period) {
+            fetch(`/table?symbol=${symbol}&period=${period}&theme={{ theme }}`)
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById(`table-container-${symbol}`).innerHTML = html;
+                });
+        }
+    </script>
+</body>
+</html>
+
+{% set symbols_str = ',' %}
+{% if symbols is iterable %}
+    {% for symbol in symbols %}
+        {% if loop.first %}
+            {% set symbols_str = symbol %}
+        {% else %}
+            {% set symbols_str = symbols_str ~ ',' ~ symbol %}
+        {% endif %}
+    {% endfor %}
+{% else %}
+    {% set symbols_str = symbols %}
+{% endif %}
