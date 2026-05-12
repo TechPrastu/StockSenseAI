@@ -59,8 +59,12 @@ Examples:
         print(f"  Forecast: {insights['forecast']}")
         print(f"  Chart Pattern: {insights['chart_pattern']}")
         print("\nLatest News:")
-        for news in insights['news']:
-            print(f"  - {news['title']}: {news['summary']}")
+        news_list = [n for n in insights['news'] if n.get('title') or n.get('summary')]
+        if news_list:
+            for news in news_list[:5]:
+                print(f"  - {news.get('title', 'No Title')}: {news.get('summary', 'No Summary')}")
+        else:
+            print("  No news found.")
         print("\nUpcoming Events:")
         for event in insights['events']:
             print(f"  - {event['event']} on {event['date']}")

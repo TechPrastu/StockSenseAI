@@ -4,3 +4,4 @@ nsetools
 pandas
 scikit-learn
 tensorflow
+yahooquery
