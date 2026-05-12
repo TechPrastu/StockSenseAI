@@ -3,155 +3,340 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Stock Dashboard</title>
+    <title>StockSense AI Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body class="{{ theme }}">
-    <div>
-        <h1>📈 Indian Stock Dashboard</h1>
-
-        <form method="POST" class="form" id="dashboard-form">
-            <label for="symbol">Stock Symbols (comma-separated):</label>
-            <input type="text" name="symbol" value="{{ symbols }}" required>
-
-            <label for="period">Select Time Range:</label>
-            <select name="period">
-                <option value="7d" {% if selected_period=='7d' %}selected{% endif %}>1 Week</option>
-                <option value="1mo" {% if selected_period=='1mo' %}selected{% endif %}>1 Month</option>
-                <option value="1y" {% if selected_period=='1y' %}selected{% endif %}>1 Year</option>
-            </select>
-
-            <label for="theme">Theme:</label>
-            <select name="theme" onchange="document.getElementById('dashboard-form').submit();">
-                <option value="light" {% if theme=='light' %}selected{% endif %}>Light</option>
-                <option value="dark" {% if theme=='dark' %}selected{% endif %}>Dark</option>
-            </select>
-        </form>
-
-        {% for stock in stock_data_list %}
-        <div class="card">
-            <h2>{{ stock.symbol }}</h2>
-            <h3>Yahoo Finance Data</h3>
-            <ul>
-                <li><b>Current Price:</b> {{ stock.yfinance_fields['Current Price'] }}</li>
-                <li><b>Previous Close:</b> {{ stock.yfinance_fields['Previous Close'] }}</li>
-                <li><b>52 Week High:</b> {{ stock.yfinance_fields['52 Week High'] }}</li>
-                <li><b>52 Week Low:</b> {{ stock.yfinance_fields['52 Week Low'] }}</li>
-                <li><b>Market Cap:</b> {{ stock.yfinance_fields['Market Cap'] }}</li>
-                <li><b>P/E Ratio:</b> {{ stock.yfinance_fields['P/E Ratio'] }}</li>
-                <li><b>Sector:</b> {{ stock.yfinance_fields['Sector'] }}</li>
-                <li><b>Website:</b> <a href="{{ stock.yfinance_fields['Website'] }}" target="_blank">{{ stock.yfinance_fields['Website'] }}</a></li>
-            </ul>
-            <p><strong>AI Predicted Next Close:</strong>
-                {% if predictions[stock.symbol] is defined %}
-                    {{ predictions[stock.symbol]|round(2) }}
-                {% else %}
-                    Not available
-                {% endif %}
-            </p>
-            <h3>📊 Price & Volume Chart</h3>
-            <div id="plotly-chart-{{ stock.symbol }}"></div>
-            <script>
-                const histData_{{ stock.symbol }} = {{ stock.hist_json|tojson }};
-                const dates_{{ stock.symbol }} = histData_{{ stock.symbol }}.map(row => row.Date);
-                const close_{{ stock.symbol }} = histData_{{ stock.symbol }}.map(row => row.Close);
-                const volume_{{ stock.symbol }} = histData_{{ stock.symbol }}.map(row => row.Volume);
-
-                const tracePrice_{{ stock.symbol }} = {
-                    x: dates_{{ stock.symbol }},
-                    y: close_{{ stock.symbol }},
-                    type: 'scatter',
-                    name: '{{ stock.symbol }} Close Price',
-                    yaxis: 'y1',
-                    line: { color: '#00b894', width: 3 }
-                };
-
-                const traceVolume_{{ stock.symbol }} = {
-                    x: dates_{{ stock.symbol }},
-                    y: volume_{{ stock.symbol }},
-                    type: 'bar',
-                    name: 'Volume',
-                    yaxis: 'y2',
-                    marker: { color: 'rgba(0,184,148,0.2)' }
-                };
-
-                const layout_{{ stock.symbol }} = {
-                    yaxis: { title: 'Price', side: 'left' },
-                    yaxis2: {
-                        title: 'Volume',
-                        overlaying: 'y',
-                        side: 'right',
-                        showgrid: false
-                    },
-                    legend: { x: 0, y: 1.2, orientation: 'h' },
-                    margin: { t: 40 }
-                };
-
-                Plotly.newPlot('plotly-chart-{{ stock.symbol }}', [tracePrice_{{ stock.symbol }}, traceVolume_{{ stock.symbol }}], layout_{{ stock.symbol }}, {responsive: true});
-            </script>
-            <div class="section">
-                <div class="subform">
-                    <label for="table-period-{{ stock.symbol }}">View Historical Table:</label>
-                    <select id="table-period-{{ stock.symbol }}" onchange="updateTable('{{ stock.symbol }}', this.value)">
-                        <option value="7d" selected>1 Week</option>
-                        <option value="1mo">1 Month</option>
-                        <option value="1y">1 Year</option>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-tag">StockSense AI</div>
+                <h1>Indian Stock Dashboard</h1>
+                <p>Track live stock data, historical trends, and AI-driven insights in a clean, responsive view.</p>
+            </div>
+            <form method="POST" class="dashboard-form" id="dashboard-form">
+                <label>
+                    <span>Search stock symbol</span>
+                    <input type="text" name="symbol" value="{{ symbol }}" placeholder="RELIANCE" required>
+                </label>
+                <label>
+                    <span>Stock Name</span>
+                    <input type="text" value="{{ stock_data_list[0].stock_profile.company_name }}" readonly>
+                </label>
+                <label>
+                    <span>Theme</span>
+                    <select name="theme" onchange="document.getElementById('dashboard-form').submit();">
+                        <option value="light" {% if theme=='light' %}selected{% endif %}>Light</option>
+                        <option value="dark" {% if theme=='dark' %}selected{% endif %}>Dark</option>
                     </select>
+                </label>
+                <div class="form-actions">
+                    <button type="submit">Search</button>
                 </div>
-                <div id="table-container-{{ stock.symbol }}">
-                    {{ stock.hist_table | safe }}
+            </form>
+        </header>
+
+        <main class="grid">
+            {% for stock in stock_data_list %}
+            <section class="stock-card card">
+                <div class="ticker-hero">
+                    <div class="ticker-details">
+                        <h2>{{ stock.stock_profile.company_name }}</h2>
+                        <div class="ticker-tags">
+                            <span class="tag">NSE: {{ stock.symbol }}</span>
+                            <span class="tag">{{ stock.stock_profile.industry or 'Industry' }}</span>
+                            {% if stock.stock_profile.exchange %}
+                                <span class="tag">{{ stock.stock_profile.exchange }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="metric-chips">
+                            <div class="metric-chip"><strong>Market Cap</strong><span>{{ stock.company_essentials.market_cap }}</span></div>
+                            <div class="metric-chip"><strong>P/E Ratio</strong><span>{{ stock.company_essentials.pe_ratio | default('N/A') }}</span></div>
+                            <div class="metric-chip"><strong>ROE</strong><span>{{ stock.company_essentials.roe }}</span></div>
+                            <div class="metric-chip"><strong>Div Yield</strong><span>{{ stock.company_essentials.div_yield }}</span></div>
+                        </div>
+                    </div>
+                    <div class="ticker-performance">
+                        <div class="price-block">
+                            <div class="price-label">LIVE PRICE</div>
+                            <div class="price-value">₹ {{ stock.current_price | default('N/A') }}</div>
+                            <div class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                {% if stock.price_change is not none %}
+                                    {% if stock.price_change >= 0 %}+{% endif %}{{ stock.price_change | round(2) }}
+                                    ({{ stock.price_change_percent | round(2) }}%)
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="market-meta">
+                            <div>BSE: Today</div>
+                            <div class="market-time">{{ stock.market_time }}</div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="ai-insights">
-                <h3>AI Insights</h3>
-                <ul>
-                    <li><b>Breakout Confirmation:</b> {{ insights[stock.symbol].breakout_confirmation }}</li>
-                    <li><b>Breakout Prediction:</b> {{ insights[stock.symbol].breakout_prediction }}</li>
-                    <li><b>Near Breakout:</b> {{ insights[stock.symbol].near_breakout }}</li>
-                    <li><b>Direction:</b> {{ insights[stock.symbol].direction }} {{ insights[stock.symbol].direction_symbol }}</li>
-                    <li><b>Forecast:</b> {{ insights[stock.symbol].forecast }}</li>
-                    <li><b>Chart Pattern:</b> {{ insights[stock.symbol].chart_pattern }}</li>
-                </ul>
-                <h4>Latest News</h4>
-                <ul>
-                    {% for news in insights[stock.symbol].news %}
-                        <li><b>{{ news.title }}</b>: {{ news.summary }}</li>
-                    {% endfor %}
-                </ul>
-                <h4>Upcoming Events</h4>
-                <ul>
-                    {% for event in insights[stock.symbol].events %}
-                        <li>{{ event.event }} on {{ event.date }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-        {% endfor %}
+
+                <div class="summary-grid enhanced">
+                    <div class="stat-card">
+                        <h3>Price Summary</h3>
+                        <div class="stat-grid">
+                            <div><span>Today's High</span><strong>{{ stock.price_summary.today_high | default('N/A') }}</strong></div>
+                            <div><span>Today's Low</span><strong>{{ stock.price_summary.today_low | default('N/A') }}</strong></div>
+                            <div><span>52 Week High</span><strong>{{ stock.price_summary.week_high | default('N/A') }}</strong></div>
+                            <div><span>52 Week Low</span><strong>{{ stock.price_summary.week_low | default('N/A') }}</strong></div>
+                        </div>
+                    </div>
+                    <div class="stat-card essentials-card">
+                        <h3>Company Essentials</h3>
+                        <div class="essentials-grid">
+                            <div><span>Market Cap</span><strong>{{ stock.company_essentials.market_cap }}</strong></div>
+                            <div><span>Enterprise Value</span><strong>{{ stock.company_essentials.enterprise_value }}</strong></div>
+                            <div><span>No. of Shares</span><strong>{{ stock.company_essentials.no_of_shares }}</strong></div>
+                            <div><span>P/E</span><strong>{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong></div>
+                            <div><span>P/B</span><strong>{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong></div>
+                            <div><span>Face Value</span><strong>{{ stock.company_essentials.face_value }}</strong></div>
+                            <div><span>Div. Yield</span><strong>{{ stock.company_essentials.div_yield }}</strong></div>
+                            <div><span>Book Value (TTM)</span><strong>{{ stock.company_essentials.book_value }}</strong></div>
+                            <div><span>Cash</span><strong>{{ stock.company_essentials.cash }}</strong></div>
+                            <div><span>Debt</span><strong>{{ stock.company_essentials.debt }}</strong></div>
+                            <div><span>EPS (TTM)</span><strong>{{ stock.company_essentials.eps | default('N/A') }}</strong></div>
+                            <div><span>ROE</span><strong>{{ stock.company_essentials.roe }}</strong></div>
+                            <div><span>ROCE</span><strong>{{ stock.company_essentials.roce }}</strong></div>
+                            <div><span>Promoter Holding</span><strong>{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fistar-card">
+                    <div class="fistar-title">FinStar</div>
+                    <div class="fistar-value">★★★☆☆</div>
+                    <div class="fistar-notes">
+                        <div><strong>Ownership</strong> Stable</div>
+                        <div><strong>Valuation</strong> Expensive</div>
+                        <div><strong>Efficiency</strong> Poor</div>
+                        <div><strong>Financials</strong> Average</div>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <div class="chart-tabs" id="chart-tabs-{{ stock.symbol }}">
+                        <button type="button" class="chart-tab active" onclick="setChartTab('{{ stock.symbol }}', 'price', this)">Price Chart</button>
+                        <button type="button" class="chart-tab" onclick="setChartTab('{{ stock.symbol }}', 'volume', this)">Volume Chart</button>
+                    </div>
+                    <div class="chart-toolbar">
+                        <div>
+                            <div class="chart-title">Price Trend</div>
+                            <p class="chart-subtitle">Interactive chart with period controls. Weekends and holiday gaps are minimized for a cleaner view.</p>
+                        </div>
+                        <div class="chart-buttons" id="chart-buttons-{{ stock.symbol }}">
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1d', this)">1d</button>
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1w', this)">1w</button>
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1m', this)">1m</button>
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '3m', this)">3m</button>
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '6m', this)">6m</button>
+                            <button type="button" class="chart-btn active" onclick="switchPeriod('{{ stock.symbol }}', '1y', this)">1y</button>
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '3y', this)">3y</button>
+                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '5y', this)">5y</button>
+                        </div>
+                    </div>
+                    <div class="chart-summary">
+                        <span class="chart-summary-label" id="chart-return-label-{{ stock.symbol }}">CAGR Return :</span>
+                        <span id="chart-return-value-{{ stock.symbol }}" class="chart-return-pill neutral">-</span>
+                    </div>
+                    <div class="chart-panel">
+                        <div id="plotly-chart-{{ stock.symbol }}"></div>
+                    </div>
+                </div>
+
+                <div class="company-summary">
+                    <h3>About {{ stock.stock_profile.company_name }}</h3>
+                    <p>{{ stock.stock_profile.summary or 'No company summary available at the moment.' }}</p>
+                    <div class="company-details">
+                        <div><strong>Sector</strong><span>{{ stock.stock_profile.sector or 'N/A' }}</span></div>
+                        <div><strong>Industry</strong><span>{{ stock.stock_profile.industry or 'N/A' }}</span></div>
+                        <div><strong>Exchange</strong><span>{{ stock.stock_profile.exchange or 'N/A' }}</span></div>
+                        <div><strong>Website</strong><span>{{ stock.stock_profile.website or 'N/A' }}</span></div>
+                    </div>
+                </div>
+
+                <div class="stock-card__insights">
+                    <h3>AI Insights</h3>
+                    <div class="insights-grid">
+                        <div class="insight-item"><strong>Breakout</strong><span>{{ insights[stock.symbol].breakout_confirmation }}</span></div>
+                        <div class="insight-item"><strong>Prediction</strong><span>{{ insights[stock.symbol].breakout_prediction }}</span></div>
+                        <div class="insight-item"><strong>Near Breakout</strong><span>{{ insights[stock.symbol].near_breakout }}</span></div>
+                        <div class="insight-item"><strong>Direction</strong><span>{{ insights[stock.symbol].direction }} {{ insights[stock.symbol].direction_symbol }}</span></div>
+                        <div class="insight-item"><strong>Forecast</strong><span>{{ insights[stock.symbol].forecast }}</span></div>
+                        <div class="insight-item"><strong>Pattern</strong><span>{{ insights[stock.symbol].chart_pattern }}</span></div>
+                    </div>
+
+                    <div class="insight-section">
+                        <h4>Latest News</h4>
+                        <ul>
+                            {% set news_list = insights[stock.symbol].news | selectattr('title') | list %}
+                            {% if news_list %}
+                                {% for news in news_list[:5] %}
+                                    <li>
+                                        <strong>{{ news.title }}</strong>
+                                        {% if news.date %}<span class="news-date">({{ news.date }})</span>{% endif %}
+                                        <p>{{ news.summary }}</p>
+                                    </li>
+                                {% endfor %}
+                            {% else %}
+                                <li>No news found.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <div class="insight-section">
+                        <h4>Upcoming Events</h4>
+                        <ul>
+                            {% for event in insights[stock.symbol].events %}
+                                <li>{{ event.event }} on {{ event.date }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </section>
+            {% endfor %}
+        </main>
     </div>
 
     <script>
-        function updateTable(symbol, period) {
-            fetch(`/table?symbol=${symbol}&period=${period}&theme={{ theme }}`)
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById(`table-container-${symbol}`).innerHTML = html;
+        const chartState = {};
+
+        function formatPercentValue(value) {
+            return value >= 0 ? `+${value.toFixed(1)}%` : `${value.toFixed(1)}%`;
+        }
+
+        function formatReturnText(value) {
+            if (value === null || Number.isNaN(value)) return 'N/A';
+            return value >= 0 ? `+${value.toFixed(1)}%` : `${value.toFixed(1)}%`;
+        }
+
+        function getReturnLabel(period) {
+            return ['1y', '3y', '5y'].includes(period) ? 'CAGR Return :' : 'Absolute Return :';
+        }
+
+        function renderChart(symbol, histData, chartType = 'price') {
+            const dates = histData.map(row => row.Date);
+            const layout = {
+                xaxis: {
+                    type: 'date',
+                    showgrid: false,
+                    tickangle: -45,
+                    tickfont: { color: '#64748b' },
+                    rangebreaks: [{ bounds: ['sat', 'mon'] }]
+                },
+                yaxis: {
+                    title: chartType === 'price' ? 'Price' : 'Volume',
+                    rangemode: 'tozero',
+                    showgrid: false,
+                    tickfont: { color: '#64748b' }
+                },
+                margin: { t: 20, l: 40, r: 30, b: 50 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                showlegend: false,
+                hovermode: 'x unified'
+            };
+
+            if (chartType === 'volume') {
+                const volume = histData.map(row => row.Volume || 0);
+                const traceVolume = {
+                    x: dates,
+                    y: volume,
+                    type: 'bar',
+                    marker: { color: 'rgba(59,130,246,0.35)' },
+                    hovertemplate: '%{x}<br>Vol %{y:.0f}<extra></extra>'
+                };
+                Plotly.newPlot(`plotly-chart-${symbol}`, [traceVolume], layout, { responsive: true, displayModeBar: false });
+                return;
+            }
+
+            const close = histData.map(row => row.Close);
+            const positiveFill = close.length > 1 && close[close.length - 1] >= close[0];
+            const tracePrice = {
+                x: dates,
+                y: close,
+                type: 'scatter',
+                mode: 'lines',
+                name: symbol,
+                fill: 'tozeroy',
+                fillcolor: positiveFill ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.15)',
+                line: { color: positiveFill ? '#16a34a' : '#ef4444', width: 3 },
+                hovertemplate: '%{x}<br>₹ %{y:.2f}<extra></extra>'
+            };
+            Plotly.newPlot(`plotly-chart-${symbol}`, [tracePrice], layout, { responsive: true, displayModeBar: false });
+        }
+
+        function calculateCagr(histData) {
+            if (!histData || histData.length < 2) return null;
+            const startPrice = histData[0].Close;
+            const endPrice = histData[histData.length - 1].Close;
+            const startDate = new Date(histData[0].Date);
+            const endDate = new Date(histData[histData.length - 1].Date);
+            const yearDiff = (endDate - startDate) / (365.25 * 24 * 60 * 60 * 1000);
+            if (yearDiff <= 0 || startPrice <= 0) return null;
+            return Math.pow(endPrice / startPrice, 1 / yearDiff) - 1;
+        }
+
+        function calculateAbsolute(histData) {
+            if (!histData || histData.length < 2) return null;
+            const startPrice = histData[0].Close;
+            const endPrice = histData[histData.length - 1].Close;
+            if (startPrice <= 0) return null;
+            return endPrice / startPrice - 1;
+        }
+
+        function updateReturn(symbol, histData, period) {
+            const isLongTerm = ['1y', '3y', '5y'].includes(period);
+            const value = isLongTerm ? calculateCagr(histData) : calculateAbsolute(histData);
+            const label = document.getElementById(`chart-return-label-${symbol}`);
+            const pill = document.getElementById(`chart-return-value-${symbol}`);
+            if (!label || !pill) return;
+
+            label.textContent = getReturnLabel(period);
+            const text = value === null ? 'N/A' : formatReturnText(value * 100);
+            const status = value === null ? 'neutral' : value >= 0 ? 'positive' : 'negative';
+            pill.textContent = text;
+            pill.className = `chart-return-pill ${status}`;
+        }
+
+        function setChartTab(symbol, type, button) {
+            const tabs = document.querySelectorAll(`#chart-tabs-${symbol} .chart-tab`);
+            tabs.forEach(tab => tab.classList.toggle('active', tab === button));
+            chartState[symbol] = chartState[symbol] || { period: '1y', chartType: 'price', histData: [] };
+            chartState[symbol].chartType = type;
+            renderChart(symbol, chartState[symbol].histData, type);
+        }
+
+        function switchPeriod(symbol, period, button) {
+            const buttons = button.parentElement.querySelectorAll('.chart-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            chartState[symbol] = chartState[symbol] || { chartType: 'price' };
+            chartState[symbol].period = period;
+
+            fetch(`/chart_data?symbol=${symbol}&period=${period}`)
+                .then(response => response.json())
+                .then(data => {
+                    chartState[symbol].histData = data.hist_json;
+                    renderChart(symbol, data.hist_json, chartState[symbol].chartType);
+                    updateReturn(symbol, data.hist_json, period);
                 });
         }
+
+        {% for stock in stock_data_list %}
+        const initialData_{{ stock.symbol }} = {{ stock.hist_json|tojson }};
+        chartState['{{ stock.symbol }}'] = { period: '1y', chartType: 'price', histData: initialData_{{ stock.symbol }} };
+        renderChart('{{ stock.symbol }}', initialData_{{ stock.symbol }}, 'price');
+        updateReturn('{{ stock.symbol }}', initialData_{{ stock.symbol }}, '1y');
+        {% endfor %}
     </script>
 </body>
 </html>
-
-{% set symbols_str = ',' %}
-{% if symbols is iterable %}
-    {% for symbol in symbols %}
-        {% if loop.first %}
-            {% set symbols_str = symbol %}
-        {% else %}
-            {% set symbols_str = symbols_str ~ ',' ~ symbol %}
-        {% endif %}
-    {% endfor %}
-{% else %}
-    {% set symbols_str = symbols %}
-{% endif %}
