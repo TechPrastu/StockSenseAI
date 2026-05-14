@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StockSense AI - Indian Stock Analysis & AI Insights</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="light">
+    <div class="app-shell">
+        <header class="home-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <span class="logo-badge">StockSense AI</span>
+                    <span class="theme-toggle" onclick="toggleTheme()">🌙</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="home-hero">
+            <section class="hero-container">
+                <div class="hero-content">
+                    <h1 class="hero-title">Stock Analysis & AI Insights</h1>
+                    <p class="hero-subtitle">Real-time data, technical analysis, and AI-driven predictions for Indian stocks</p>
+
+                    <form method="GET" action="/dashboard" class="home-search-form">
+                        <div class="search-wrapper">
+                            <input 
+                                type="text" 
+                                name="symbol" 
+                                placeholder="Search stock by symbol (RELIANCE, TCS, INFY...)" 
+                                class="home-search-input"
+                                required
+                            />
+                            <button type="submit" class="search-submit">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                    <path d="M9 17C13.4183 17 17 13.4183 17 9C17 4.58172 13.4183 1 9 1C4.58172 1 1 4.58172 1 9C1 13.4183 4.58172 17 9 17Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M19 19L14.65 14.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section class="trending-section">
+                <div class="trending-header">
+                    <h2 class="trending-title">Explore Popular Stocks</h2>
+                    <p class="trending-subtitle">Start with these frequently analyzed companies</p>
+                </div>
+
+                <div class="trending-grid">
+                    {% for stock in trending_stocks %}
+                    <a href="/dashboard?symbol={{ stock.symbol }}" class="trending-card">
+                        <div class="stock-symbol">{{ stock.symbol }}</div>
+                        <div class="stock-name">{{ stock.name }}</div>
+                        <div class="stock-sector">{{ stock.sector }}</div>
+                        <div class="stock-price-info">
+                            <span class="stock-price">₹{{ stock.price }}</span>
+                            <span class="stock-change {% if stock.change|float >= 0 %}positive{% else %}negative{% endif %}">
+                                {% if stock.change|float >= 0 %}+{% endif %}{{ stock.change }}%
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="features-section">
+                <h2 class="features-title">Why StockSense AI?</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3>Live Market Data</h3>
+                        <p>Real-time stock prices, volume, and market movements</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🤖</div>
+                        <h3>AI Insights</h3>
+                        <p>Machine learning predictions and chart pattern analysis</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📈</div>
+                        <h3>Technical Analysis</h3>
+                        <p>Interactive charts with CAGR calculations and trends</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Fundamentals</h3>
+                        <p>P/E ratios, ROE, market cap, and financial metrics</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="home-footer">
+            <p>&copy; 2026 StockSense AI. Real-time Indian stock analysis powered by AI.</p>
+        </footer>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            body.classList.toggle('dark');
+            localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+        }
+
+        // Load theme preference
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark');
+        }
+    </script>
+</body>
+</html>

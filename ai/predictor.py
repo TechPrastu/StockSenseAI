@@ -8,8 +8,9 @@ import threading
 from ai.logger import StockSenseAILogger
 # pip install yahooquery
 from yahooquery import Ticker
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
+INDIA_TZ = timezone(timedelta(hours=5, minutes=30))
 logger = StockSenseAILogger.get_logger(__name__)
 
 def calculate_rsi(series, window=14):
@@ -218,6 +219,8 @@ def retrain_in_background(symbol, predictor):
 
 def format_news_date(ts):
     try:
-        return datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+        if isinstance(ts, (int, float)) and ts > 0:
+            return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(INDIA_TZ).strftime('%Y-%m-%d %H:%M %Z')
+        return str(ts)
     except Exception:
         return ""

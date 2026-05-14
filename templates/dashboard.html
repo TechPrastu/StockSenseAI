@@ -13,30 +13,29 @@
 <body class="{{ theme }}">
     <div class="app-shell">
         <header class="topbar">
-            <div class="brand">
-                <div class="brand-tag">StockSense AI</div>
-                <h1>Indian Stock Dashboard</h1>
-                <p>Track live stock data, historical trends, and AI-driven insights in a clean, responsive view.</p>
+            <div class="topbar-header">
+                <div class="brand">
+                    <div class="brand-tag">StockSense AI</div>
+                    <h1>Indian Stock Dashboard</h1>
+                    <p>Track live stock data, historical trends, and AI-driven insights in a clean, responsive view.</p>
+                </div>
+                <div class="topbar-actions">
+                    <a href="/" class="nav-pill">Home</a>
+                    <button type="button" class="theme-toggle" onclick="toggleTheme()">🌙</button>
+                </div>
             </div>
             <form method="POST" class="dashboard-form" id="dashboard-form">
-                <label>
+                <label class="search-field">
                     <span>Search stock symbol</span>
-                    <input type="text" name="symbol" value="{{ symbol }}" placeholder="RELIANCE" required>
+                    <div class="search-wrapper">
+                        <input class="home-search-input" type="text" name="symbol" value="{{ symbol }}" placeholder="RELIANCE" required>
+                        <button class="search-submit" type="submit">Search</button>
+                    </div>
                 </label>
                 <label>
                     <span>Stock Name</span>
-                    <input type="text" value="{{ stock_data_list[0].stock_profile.company_name }}" readonly>
+                    <input class="home-search-input" type="text" value="{{ stock_data_list[0].stock_profile.company_name }}" readonly>
                 </label>
-                <label>
-                    <span>Theme</span>
-                    <select name="theme" onchange="document.getElementById('dashboard-form').submit();">
-                        <option value="light" {% if theme=='light' %}selected{% endif %}>Light</option>
-                        <option value="dark" {% if theme=='dark' %}selected{% endif %}>Dark</option>
-                    </select>
-                </label>
-                <div class="form-actions">
-                    <button type="submit">Search</button>
-                </div>
             </form>
         </header>
 
@@ -337,6 +336,28 @@
         renderChart('{{ stock.symbol }}', initialData_{{ stock.symbol }}, 'price');
         updateReturn('{{ stock.symbol }}', initialData_{{ stock.symbol }}, '1y');
         {% endfor %}
+
+        function toggleTheme() {
+            const body = document.body;
+            body.classList.toggle('dark');
+            body.classList.toggle('light');
+            const currentTheme = body.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('theme', currentTheme);
+            document.querySelectorAll('.theme-toggle').forEach(btn => {
+                btn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+            });
+        }
+
+        (function loadDashboardTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.body.classList.remove('light', 'dark');
+                document.body.classList.add(savedTheme);
+            }
+            document.querySelectorAll('.theme-toggle').forEach(btn => {
+                btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+            });
+        })();
     </script>
 </body>
 </html>

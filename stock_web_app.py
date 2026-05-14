@@ -1,15 +1,41 @@
 from flask import Flask, render_template, request, jsonify
-import yfinance as yf
-from yahooquery import Ticker
-from nsetools import Nse
-import pandas as pd
-from ai.predictor import StockPredictor
-from ai.logger import StockSenseAILogger
 
 app = Flask(__name__)
-nse = Nse()
-stock_predictor = StockPredictor()
-logger = StockSenseAILogger.get_logger(__name__)
+_nse = None
+_stock_predictor = None
+_logger = None
+_recent_searches = []  # Store recent search history
+
+def get_logger():
+    global _logger
+    if _logger is None:
+        from ai.logger import StockSenseAILogger
+        _logger = StockSenseAILogger.get_logger(__name__)
+    return _logger
+
+def get_nse():
+    global _nse
+    if _nse is None:
+        from nsetools import Nse
+        _nse = Nse()
+    return _nse
+
+def get_stock_predictor():
+    global _stock_predictor
+    if _stock_predictor is None:
+        from ai.predictor import StockPredictor
+        _stock_predictor = StockPredictor()
+    return _stock_predictor
+
+def add_recent_search(symbol):
+    """Add a symbol to recent searches, keeping only unique entries."""
+    global _recent_searches
+    symbol_upper = symbol.upper()
+    if symbol_upper in _recent_searches:
+        _recent_searches.remove(symbol_upper)
+    _recent_searches.insert(0, symbol_upper)
+    # Keep only the most recent 10 searches
+    _recent_searches[:] = _recent_searches[:10]
 
 def format_inr(value):
     if value is None:
@@ -41,6 +67,10 @@ def format_percent(value, scale=True):
 
 
 def get_stock_data(symbol, period='7d', table_period='7d'):
+    import yfinance as yf
+    from yahooquery import Ticker
+    import pandas as pd
+    
     period_map = {
         '1w': '5d',
         '1m': '1mo',
@@ -121,7 +151,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         'eps': yq_financial.get('trailingEps') or info.get('trailingEps'),
         'roe': format_percent(yq_financial.get('returnOnEquity')),
         'roce': format_percent(yq_financial.get('returnOnAssets')),
-        'promoter_holding': nse.get_quote(symbol.lower()).get('promoterHolding') if hasattr(nse, 'get_quote') else 'N/A',
+        'promoter_holding': get_nse().get_quote(symbol.lower()).get('promoterHolding') if hasattr(get_nse(), 'get_quote') else 'N/A',
         'sales_growth': 'N/A',
         'profit_growth': 'N/A'
     }
@@ -138,7 +168,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
 
     # NSE live data
     try:
-        nse_data = nse.get_quote(symbol.lower())
+        nse_data = get_nse().get_quote(symbol.lower())
         nse_info = {
             'Last Traded Price': nse_data.get('lastPrice'),
             'Day High': nse_data.get('dayHigh'),
@@ -149,6 +179,15 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         }
     except Exception as e:
         nse_info = {}
+
+    market_time = yq_price.get('regularMarketTime') or ''
+    if isinstance(market_time, (int, float)) and market_time > 0:
+        from datetime import timezone, timedelta
+        india_tz = timezone(timedelta(hours=5, minutes=30))
+        try:
+            market_time = datetime.fromtimestamp(market_time, tz=timezone.utc).astimezone(india_tz).strftime('%Y-%m-%d %H:%M %Z')
+        except Exception:
+            market_time = str(market_time)
 
     return {
         'symbol': symbol.upper(),
@@ -162,20 +201,90 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         'previous_close': previous_close,
         'price_change': change,
         'price_change_percent': change_percent,
-        'market_time': yq_price.get('regularMarketTime') or ''
+        'market_time': market_time
     }
 
-@app.route("/", methods=["GET", "POST"])
-def index():
+def get_trending_stocks():
+    """Fetch trending stocks data for the home page based on recent searches."""
+    global _recent_searches
+    
+    # Default fallback stocks
+    default_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV']
+    
+    # Use recent searches if available, otherwise use defaults
+    trending_symbols = _recent_searches[:5] if _recent_searches else default_stocks[:5]
+    
+    # Fallback data for all possible stocks
+    fallback_data = {
+        'RELIANCE': {'name': 'Reliance', 'sector': 'Energy', 'price': '3050.00', 'change': '2.50'},
+        'TCS': {'name': 'Tata Consultancy', 'sector': 'IT', 'price': '3820.00', 'change': '-1.20'},
+        'INFY': {'name': 'Infosys', 'sector': 'IT', 'price': '1890.00', 'change': '1.80'},
+        'HDFC': {'name': 'HDFC Bank', 'sector': 'Banking', 'price': '2120.00', 'change': '0.95'},
+        'BAJAJFINSV': {'name': 'Bajaj Finance', 'sector': 'Finance', 'price': '1580.00', 'change': '-0.50'},
+        'HINDUNILVR': {'name': 'HUL', 'sector': 'FMCG', 'price': '2290.00', 'change': '1.30'},
+        'LT': {'name': 'Larsen & Toubro', 'sector': 'Engineering', 'price': '3210.00', 'change': '2.10'},
+        'ASIANPAINT': {'name': 'Asian Paints', 'sector': 'Chemicals', 'price': '3150.00', 'change': '-0.80'},
+        'AXISBANK': {'name': 'Axis Bank', 'sector': 'Banking', 'price': '1190.00', 'change': '1.50'},
+        'HCLTECH': {'name': 'HCL Tech', 'sector': 'IT', 'price': '1620.00', 'change': '0.70'},
+        'ONGC': {'name': 'ONGC', 'sector': 'Energy', 'price': '315.00', 'change': '1.20'},
+        'CDSL': {'name': 'CDSL', 'sector': 'Financial Services', 'price': '1186.20', 'change': '0.32'},
+        'BSE': {'name': 'BSE Limited', 'sector': 'Financial Services', 'price': '3888.80', 'change': '0.96'},
+        'WIPRO': {'name': 'Wipro', 'sector': 'IT', 'price': '520.00', 'change': '0.75'},
+        'ICICIBANK': {'name': 'ICICI Bank', 'sector': 'Banking', 'price': '940.00', 'change': '-0.40'},
+        'SBIN': {'name': 'State Bank of India', 'sector': 'Banking', 'price': '720.00', 'change': '0.60'},
+    }
+    
+    trending = []
+    for symbol in trending_symbols:
+        stock_info = fallback_data.get(symbol)
+        if stock_info is None:
+            try:
+                live_stock = get_stock_data(symbol, period='7d')
+                current_price = live_stock.get('current_price')
+                change_pct = live_stock.get('price_change_percent')
+                stock_info = {
+                    'name': live_stock['stock_profile'].get('company_name', symbol),
+                    'sector': live_stock['stock_profile'].get('sector', 'N/A'),
+                    'price': f"{current_price:.2f}" if isinstance(current_price, (int, float)) else 'N/A',
+                    'change': f"{change_pct * 100:.2f}" if isinstance(change_pct, (int, float)) else '0.00'
+                }
+            except Exception:
+                stock_info = {
+                    'name': symbol,
+                    'sector': 'N/A',
+                    'price': 'N/A',
+                    'change': '0.00'
+                }
+        trending.append({
+            'symbol': symbol,
+            'name': stock_info['name'],
+            'sector': stock_info['sector'],
+            'price': stock_info['price'],
+            'change': stock_info['change'],
+        })
+
+    return trending
+
+@app.route("/")
+def home():
+    theme = request.args.get("theme", "light")
+    trending_stocks = get_trending_stocks()
+    return render_template("home.html", theme=theme, trending_stocks=trending_stocks)
+
+@app.route("/dashboard", methods=["GET", "POST"])
+def dashboard():
     if request.method == "POST":
         symbol = request.form.get("symbol", "RELIANCE").strip().split(",")[0].strip()
         theme = request.form.get("theme", "light")
     else:
-        symbol = "RELIANCE"
-        theme = "light"
+        symbol = request.args.get("symbol", "RELIANCE").strip().split(",")[0].strip()
+        theme = request.args.get("theme", "light")
 
     if not symbol:
         symbol = "RELIANCE"
+
+    # Add to recent searches
+    add_recent_search(symbol)
 
     stock_data_list = [get_stock_data(symbol, period='1y')]
 
@@ -183,12 +292,12 @@ def index():
     predictions = {}
     insights_dict = {}
     symbol_upper = symbol.upper()
-    stock_predictor.train(symbol_upper)
-    predictions[symbol_upper] = stock_predictor.predict(symbol_upper)
-    insights_dict[symbol_upper] = stock_predictor.get_insights(symbol_upper)
+    get_stock_predictor().train(symbol_upper)
+    predictions[symbol_upper] = get_stock_predictor().predict(symbol_upper)
+    insights_dict[symbol_upper] = get_stock_predictor().get_insights(symbol_upper)
 
     return render_template(
-        "index.html",
+        "dashboard.html",
         symbol=symbol_upper,
         theme=theme,
         stock_data_list=stock_data_list,
@@ -207,8 +316,9 @@ def chart_data():
 
 @app.before_request
 def log_request_info():
-    logger.info(f"User requested data for {request.args.get('symbol')}")
-    logger.debug(f"Request data: {request.args}")
+    pass  # Logging disabled for now
+    # get_logger().info(f"User requested data for {request.args.get('symbol')}")
+    # get_logger().debug(f"Request data: {request.args}")
 
 if __name__ == "__main__":
     app.run(debug=True)
