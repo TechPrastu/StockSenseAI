@@ -66,6 +66,10 @@ def format_percent(value, scale=True):
         return str(value)
 
 
+def safe_value(value, default='N/A'):
+    return default if value is None else value
+
+
 def get_stock_data(symbol, period='7d', table_period='7d'):
     import yfinance as yf
     from yahooquery import Ticker
@@ -86,8 +90,34 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
     yq_ticker = Ticker(yf_symbol)
 
     # Historical data
-    hist = ticker.history(period=yf_period).reset_index()
-    hist['Date'] = pd.to_datetime(hist['Date']).dt.strftime('%Y-%m-%d')
+    # For intraday (1d) requests, ask for a smaller interval and keep time component
+    try:
+        if period == '1d':
+            # request intraday bars (5 minute) for a clearer 1-day chart
+            hist = ticker.history(period='1d', interval='5m').reset_index()
+            if 'Datetime' in hist.columns:
+                date_series = pd.to_datetime(hist['Datetime'])
+            else:
+                date_series = pd.to_datetime(hist['Date'])
+
+            # Convert intraday timestamps to India local time if possible
+            if date_series.dt.tz is None:
+                date_series = date_series.dt.tz_localize('UTC')
+            date_series = date_series.dt.tz_convert('Asia/Kolkata')
+            hist['Date'] = date_series.dt.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            hist = ticker.history(period=yf_period).reset_index()
+            hist['Date'] = pd.to_datetime(hist['Date']).dt.strftime('%Y-%m-%d')
+    except Exception:
+        # fallback to a safe empty DataFrame structure
+        hist = pd.DataFrame(columns=['Date', 'Close', 'Volume'])
+
+    # Ensure Close and Volume exist and are numeric
+    if 'Close' not in hist.columns:
+        hist['Close'] = None
+    if 'Volume' not in hist.columns:
+        hist['Volume'] = 0
+
     hist_data = hist[['Date', 'Close', 'Volume']].to_dict(orient='records')
 
     # Info
@@ -141,17 +171,17 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         'market_cap': format_inr_crore(yq_price.get('marketCap') or info.get('marketCap')),
         'enterprise_value': format_inr_crore(yq_financial.get('enterpriseValue')),
         'no_of_shares': format_inr(yq_financial.get('sharesOutstanding') or info.get('sharesOutstanding')),
-        'pe_ratio': yq_financial.get('trailingPE') or yq_detail.get('trailingPE') or info.get('trailingPE'),
-        'pb_ratio': yq_financial.get('priceToBook') or info.get('priceToBook'),
-        'face_value': info.get('faceValue') or 'N/A',
+        'pe_ratio': safe_value(yq_financial.get('trailingPE') or yq_detail.get('trailingPE') or info.get('trailingPE')),
+        'pb_ratio': safe_value(yq_financial.get('priceToBook') or info.get('priceToBook')),
+        'face_value': safe_value(info.get('faceValue')),
         'div_yield': format_percent(yq_detail.get('dividendYield')),
         'book_value': format_inr(yq_financial.get('bookValue')),
         'cash': format_inr_crore(yq_financial.get('totalCash')),
         'debt': format_inr_crore(yq_financial.get('totalDebt')),
-        'eps': yq_financial.get('trailingEps') or info.get('trailingEps'),
+        'eps': safe_value(yq_financial.get('trailingEps') or info.get('trailingEps')),
         'roe': format_percent(yq_financial.get('returnOnEquity')),
         'roce': format_percent(yq_financial.get('returnOnAssets')),
-        'promoter_holding': get_nse().get_quote(symbol.lower()).get('promoterHolding') if hasattr(get_nse(), 'get_quote') else 'N/A',
+        'promoter_holding': safe_value(get_nse().get_quote(symbol.lower()).get('promoterHolding') if hasattr(get_nse(), 'get_quote') else None),
         'sales_growth': 'N/A',
         'profit_growth': 'N/A'
     }

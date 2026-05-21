@@ -93,11 +93,11 @@
                         <h3>Company Essentials</h3>
                         <div class="essentials-grid">
                             <div><span>Market Cap</span><strong>{{ stock.company_essentials.market_cap }}</strong></div>
-                            <div><span>Enterprise Value</span><strong>{{ stock.company_essentials.enterprise_value }}</strong></div>
+                            <div><span>Enterprise Value</span><strong>{{ stock.company_essentials.enterprise_value | default('N/A') }}</strong></div>
                             <div><span>No. of Shares</span><strong>{{ stock.company_essentials.no_of_shares }}</strong></div>
                             <div><span>P/E</span><strong>{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong></div>
                             <div><span>P/B</span><strong>{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong></div>
-                            <div><span>Face Value</span><strong>{{ stock.company_essentials.face_value }}</strong></div>
+                            <div><span>Face Value</span><strong>{{ stock.company_essentials.face_value | default('N/A') }}</strong></div>
                             <div><span>Div. Yield</span><strong>{{ stock.company_essentials.div_yield }}</strong></div>
                             <div><span>Book Value (TTM)</span><strong>{{ stock.company_essentials.book_value }}</strong></div>
                             <div><span>Cash</span><strong>{{ stock.company_essentials.cash }}</strong></div>
@@ -165,12 +165,45 @@
                 <div class="stock-card__insights">
                     <h3>AI Insights</h3>
                     <div class="insights-grid">
-                        <div class="insight-item"><strong>Breakout</strong><span>{{ insights[stock.symbol].breakout_confirmation }}</span></div>
-                        <div class="insight-item"><strong>Prediction</strong><span>{{ insights[stock.symbol].breakout_prediction }}</span></div>
-                        <div class="insight-item"><strong>Near Breakout</strong><span>{{ insights[stock.symbol].near_breakout }}</span></div>
-                        <div class="insight-item"><strong>Direction</strong><span>{{ insights[stock.symbol].direction }} {{ insights[stock.symbol].direction_symbol }}</span></div>
-                        <div class="insight-item"><strong>Forecast</strong><span>{{ insights[stock.symbol].forecast }}</span></div>
-                        <div class="insight-item"><strong>Pattern</strong><span>{{ insights[stock.symbol].chart_pattern }}</span></div>
+                        <div class="insight-item">
+                            <div class="insight-title"><span class="insight-icon" title="Breakout">⚡</span> Breakout</div>
+                            <div class="insight-body">{{ insights[stock.symbol].breakout_confirmation }}</div>
+                            <div class="insight-sub">{{ insights[stock.symbol].breakout_prediction }}</div>
+                            {% if insights[stock.symbol].breakout_level is not none %}
+                                <div class="insight-meta">Level: {{ insights[stock.symbol].breakout_level | round(2) }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="insight-item">
+                            <div class="insight-title"><span class="insight-icon" title="Direction">🔺</span> Direction</div>
+                            <div class="insight-body">{{ insights[stock.symbol].direction }} {{ insights[stock.symbol].direction_symbol }}</div>
+                            {% if insights[stock.symbol].confidence is not none %}
+                                <div class="insight-pill" title="Model confidence (higher is better)">Confidence: {{ (insights[stock.symbol].confidence * 100) | round(0) }}%</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="insight-item">
+                            <div class="insight-title"><span class="insight-icon" title="Forecast">📊</span> Forecast</div>
+                            <div class="insight-body">{{ insights[stock.symbol].forecast }}</div>
+                            {% if insights[stock.symbol].predicted_next is not none %}
+                                <div class="insight-meta">Next: {{ insights[stock.symbol].predicted_next | round(2) }} ({{ insights[stock.symbol].forecast_lower | round(2) }} - {{ insights[stock.symbol].forecast_upper | round(2) }})</div>
+                            {% endif %}
+                            {% if insights[stock.symbol].volatility is not none %}
+                                <div class="insight-meta" title="Daily price volatility">Volatility: {{ (insights[stock.symbol].volatility * 100) | round(2) }}%</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="insight-item">
+                            <div class="insight-title">Pattern</div>
+                            <div class="insight-body">{{ insights[stock.symbol].chart_pattern }}</div>
+                        </div>
+                        <div class="insight-item insight-advice">
+                            <div class="insight-title">Action Advice</div>
+                            <div class="insight-body">{{ insights[stock.symbol].advice }}</div>
+                            {% if insights[stock.symbol].trailing_stop_pct is not none %}
+                                <div class="insight-meta">Suggested trailing stop: {{ insights[stock.symbol].trailing_stop_pct }}%</div>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <div class="insight-section">
@@ -223,17 +256,28 @@
 
         function renderChart(symbol, histData, chartType = 'price') {
             const dates = histData.map(row => row.Date);
+            const period = chartState[symbol] && chartState[symbol].period;
+            const isIntraday = period === '1d';
+            const minClose = histData.reduce((min, row) => row.Close != null ? Math.min(min, row.Close) : min, Infinity);
+            const maxClose = histData.reduce((max, row) => row.Close != null ? Math.max(max, row.Close) : max, -Infinity);
+            const defaultLow = minClose === Infinity ? 0 : Math.max(0, minClose * 0.98);
+            const defaultHigh = maxClose === -Infinity ? undefined : maxClose * 1.02;
+            const yRange = chartType === 'price' && Number.isFinite(defaultLow) && Number.isFinite(defaultHigh)
+                ? [defaultLow, defaultHigh]
+                : undefined;
             const layout = {
                 xaxis: {
                     type: 'date',
                     showgrid: false,
                     tickangle: -45,
                     tickfont: { color: '#64748b' },
+                    tickformat: isIntraday ? '%H:%M' : undefined,
                     rangebreaks: [{ bounds: ['sat', 'mon'] }]
                 },
                 yaxis: {
                     title: chartType === 'price' ? 'Price' : 'Volume',
-                    rangemode: 'tozero',
+                    rangemode: chartType === 'price' ? 'normal' : 'tozero',
+                    range: yRange,
                     showgrid: false,
                     tickfont: { color: '#64748b' }
                 },
