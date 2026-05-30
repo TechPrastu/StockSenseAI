@@ -57,7 +57,19 @@ Examples:
         print(f"  Near Breakout: {insights['near_breakout']}")
         print(f"  Direction: {insights['direction']} {insights['direction_symbol']}")
         print(f"  Forecast: {insights['forecast']}")
-        print(f"  Chart Pattern: {insights['chart_pattern']}")
+        print(f"  Chart Pattern: {insights.get('pattern_title') or insights['chart_pattern']}")
+        if insights.get('pattern_description'):
+            print(f"  Pattern Details: {insights['pattern_description']}")
+        if insights.get('pattern_notes'):
+            print(f"  Pattern Notes: {insights['pattern_notes']}")
+        print(f"  Advice: {insights['advice']}")
+        if insights.get('trailing_stop_pct') is not None:
+            print(f"  Suggested trailing stop: {insights['trailing_stop_pct']}%")
+        if stock_data.get('value_checklist'):
+            print("\nValue Stock Checklist:")
+            for item in stock_data['value_checklist']:
+                status = 'Pass' if item['status'] == 'pass' else 'Fail' if item['status'] == 'fail' else 'Unknown'
+                print(f"  - {item['label']}: {item['value_display']} {item['threshold_display']} -> {status}")
         print("\nLatest News:")
         news_list = [n for n in insights['news'] if n.get('title') or n.get('summary')]
         if news_list:

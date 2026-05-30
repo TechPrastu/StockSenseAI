@@ -12,22 +12,30 @@
   "Moving Average Breakout": {
     "title": "Moving Average Breakout",
     "description": "Price crossed above its short vs long moving average — trend may be starting. Suggested action: consider a trailing stop at {suggested_trailing_pct}%.",
-    "suggested_trailing_pct": 3
+    "suggested_trailing_pct": 3,
+    "aliases": ["MA Breakout", "SMA Breakout", "Moving Average Cross"],
+    "notes": "Use this when momentum is building and the price is above both the short and medium-term moving averages."
   },
   "Double Top": {
     "title": "Double Top",
     "description": "Price formed two similar peaks with a valley between — this can signal a reversal. Suggested action: tighten stops or consider reducing position; suggested trailing stop {suggested_trailing_pct}%.",
-    "suggested_trailing_pct": 2
+    "suggested_trailing_pct": 2,
+    "aliases": ["Double-top", "M Double Top"],
+    "notes": "Watch the support level between the tops; a breakdown below it can confirm the reversal."
   },
   "Double Bottom": {
     "title": "Double Bottom",
     "description": "Price formed two similar lows with a peak between — this can signal a bullish reversal. Suggested action: consider entry on breakout above resistance with a tight trailing stop of {suggested_trailing_pct}%.",
-    "suggested_trailing_pct": 2
+    "suggested_trailing_pct": 2,
+    "aliases": ["Double-bottom", "W Bottom"],
+    "notes": "Confirmation comes when price breaks above the peak between the two lows."
   },
   "Head and Shoulders": {
     "title": "Head and Shoulders",
     "description": "Classic reversal pattern (left shoulder - head - right shoulder). Suggested action: defensive trailing stop and consider exit if neckline breaks. Suggested trailing stop {suggested_trailing_pct}%.",
-    "suggested_trailing_pct": 2
+    "suggested_trailing_pct": 2,
+    "aliases": ["Head & Shoulders", "H&S"],
+    "notes": "The neckline is the critical support level; a decisive break signals the pattern."
   },
   "Cup and Handle": {
     "title": "Cup and Handle",
@@ -37,17 +45,23 @@
   "Ascending Triangle": {
     "title": "Ascending Triangle",
     "description": "Higher lows and flat resistance can precede an upside breakout. Suggested action: watch for a breakout above resistance and trail stop at {suggested_trailing_pct}%.",
-    "suggested_trailing_pct": 3
+    "suggested_trailing_pct": 3,
+    "aliases": ["Ascending triangle", "Bullish Triangle"],
+    "notes": "A bullish breakout above resistance is the primary signal; keep stops below rising lows."
   },
   "Descending Triangle": {
     "title": "Descending Triangle",
     "description": "Lower highs and flat support can precede a downside move. Suggested action: use a defensive stop at {suggested_trailing_pct}% and wait for a confirmed break.",
-    "suggested_trailing_pct": 3
+    "suggested_trailing_pct": 3,
+    "aliases": ["Descending triangle", "Bearish Triangle"],
+    "notes": "A breakdown below the flat support is the key trigger for continuation."
   },
   "Bull Flag": {
     "title": "Bull Flag",
     "description": "A sharp advance followed by a narrow consolidation suggests continuation higher. Suggested action: prioritize momentum and keep a tight trailing stop of {suggested_trailing_pct}%.",
-    "suggested_trailing_pct": 2
+    "suggested_trailing_pct": 2,
+    "aliases": ["Bull Flag Pattern", "Flag continuation"],
+    "notes": "The consolidation should be short and shallow after a strong run-up."
   },
   "Bear Flag": {
     "title": "Bear Flag",

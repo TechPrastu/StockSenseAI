@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error - StockSense AI Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="{{ theme }}">
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="topbar-header">
+                <div class="brand">
+                    <div class="brand-tag">StockSense AI</div>
+                    <h1>Indian Stock Dashboard</h1>
+                </div>
+                <div class="topbar-actions">
+                    <a href="/" class="nav-pill">Home</a>
+                    <button type="button" class="theme-toggle" onclick="toggleTheme()">🌙</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="grid">
+            <section class="stock-card card error-card">
+                <div class="error-container">
+                    <div class="error-icon">⚠️</div>
+                    <h2>Stock Not Found</h2>
+                    <p class="error-message">{{ error_message }}</p>
+                    
+                    <div class="suggestions-container">
+                        <h3>Suggested Stocks</h3>
+                        <div class="suggestions-grid">
+                            {% for stock in suggestions %}
+                                <a href="/dashboard?symbol={{ stock }}" class="suggestion-chip">
+                                    {{ stock }}
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="error-actions">
+                        <a href="/" class="btn btn-primary">Go Back Home</a>
+                        <form method="GET" action="/dashboard" style="display: inline;">
+                            <input type="text" name="symbol" placeholder="Enter stock symbol (e.g., RELIANCE)" class="search-input" required>
+                            <button type="submit" class="btn btn-secondary">Search</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            body.classList.toggle('dark');
+            body.classList.toggle('light');
+            const currentTheme = body.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('theme', currentTheme);
+            document.querySelectorAll('.theme-toggle').forEach(btn => {
+                btn.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+            });
+        }
+
+        (function loadTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                document.body.classList.remove('light', 'dark');
+                document.body.classList.add(savedTheme);
+            }
+            document.querySelectorAll('.theme-toggle').forEach(btn => {
+                btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+            });
+        })();
+    </script>
+</body>
+</html>

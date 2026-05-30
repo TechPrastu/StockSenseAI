@@ -20,45 +20,99 @@ import json
 from pathlib import Path
 
 _PATTERN_MAP = None
+_PATTERN_MAP_MTIME = None
 
 def load_pattern_map():
-    global _PATTERN_MAP
-    if _PATTERN_MAP is not None:
-        return _PATTERN_MAP
+    global _PATTERN_MAP, _PATTERN_MAP_MTIME
     p = Path(__file__).parent / 'patterns.json'
-    if p.exists():
-        try:
-            _PATTERN_MAP = json.loads(p.read_text())
-        except Exception:
-            _PATTERN_MAP = {}
-    else:
+    if not p.exists():
         _PATTERN_MAP = {}
+        _PATTERN_MAP_MTIME = None
+        return _PATTERN_MAP
+
+    try:
+        current_mtime = p.stat().st_mtime
+        if _PATTERN_MAP is None or _PATTERN_MAP_MTIME != current_mtime:
+            _PATTERN_MAP = json.loads(p.read_text())
+            _PATTERN_MAP_MTIME = current_mtime
+    except Exception:
+        if _PATTERN_MAP is None:
+            _PATTERN_MAP = {}
     return _PATTERN_MAP
 
+def normalize_pattern_map(patterns):
+    normalized = {}
+    for key, entry in (patterns or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        normalized[key.strip()] = {
+            'title': entry.get('title', key.strip()),
+            'description': entry.get('description', ''),
+            'suggested_trailing_pct': entry.get('suggested_trailing_pct', 3),
+            'notes': entry.get('notes', ''),
+            'risk_level': entry.get('risk_level', ''),
+            'aliases': [a.lower() for a in entry.get('aliases', []) if isinstance(a, str)],
+            **entry,
+        }
+    return normalized
+
+
+def find_pattern_map_entry(chart_pattern, patterns):
+    if not chart_pattern or not patterns:
+        return None
+    chart_pattern_text = str(chart_pattern).strip()
+    lower_pattern = chart_pattern_text.lower()
+
+    if chart_pattern_text in patterns:
+        return patterns[chart_pattern_text]
+
+    for key, entry in patterns.items():
+        if key.lower() == lower_pattern:
+            return entry
+
+    for key, entry in patterns.items():
+        if key.lower() in lower_pattern or lower_pattern in key.lower():
+            return entry
+
+    for entry in patterns.values():
+        for alias in entry.get('aliases', []):
+            if alias and alias in lower_pattern:
+                return entry
+
+    return None
+
+
 def apply_pattern_advice(insights, hist=None):
-    """Add `advice` and `trailing_stop_pct` to insights based on detected pattern or heuristics."""
-    patterns = load_pattern_map()
+    """Add `advice`, `trailing_stop_pct`, and structured pattern details to insights."""
+    patterns = normalize_pattern_map(load_pattern_map())
     chart_pattern = insights.get('chart_pattern') or ''
-    # match by substring (case-insensitive)
-    matched = None
-    for key, val in patterns.items():
-        if key.lower() in str(chart_pattern).lower():
-            matched = val
-            break
+    matched = find_pattern_map_entry(chart_pattern, patterns)
 
     if matched:
-        pct = matched.get('suggested_trailing_pct')
-        desc = matched.get('description', '')
-        insights['advice'] = desc.format(suggested_trailing_pct=pct)
-        insights['trailing_stop_pct'] = pct
+        trailing_pct = matched.get('suggested_trailing_pct', 3)
+        advice_template = matched.get('advice') or matched.get('description', '')
+        advice = advice_template.format(suggested_trailing_pct=trailing_pct)
+
+        insights['pattern_title'] = matched.get('title', chart_pattern)
+        insights['pattern_description'] = matched.get('description', '')
+        insights['pattern_notes'] = matched.get('notes')
+        insights['pattern_risk_level'] = matched.get('risk_level')
+        insights['pattern_known'] = True
+        insights['trailing_stop_pct'] = trailing_pct
+        insights['advice'] = advice
         return insights
 
-    # Fallback heuristic: use volatility and direction
+    insights['pattern_title'] = chart_pattern or 'Unknown pattern'
+    insights['pattern_description'] = ''
+    insights['pattern_notes'] = ''
+    insights['pattern_risk_level'] = ''
+    insights['pattern_known'] = False
+
     vol = insights.get('volatility')
     conf = insights.get('confidence')
     direction = insights.get('direction')
     if isinstance(vol, (int, float)):
-        suggested = max(1.0, round(vol * 200, 1))  # e.g., vol 0.02 -> 4%
+        suggested = max(1.0, round(vol * 200, 1))
     else:
         suggested = 3.0
 
@@ -415,15 +469,8 @@ class StockPredictor:
             # prefer recently prepared `data` (with indicators)
             pattern = (
                 detect_moving_average_breakout(data)
-                or detect_ema_alignment(data)
-                or detect_ema_pullback(data)
-                or detect_vwap_support(data)
-                or detect_cup_and_handle(data)
-                or detect_flat_base(data)
                 or detect_ascending_triangle(data)
                 or detect_descending_triangle(data)
-                or detect_falling_wedge(data)
-                or detect_three_drives(data)
                 or detect_double_bottom(data)
                 or detect_head_and_shoulders(data)
                 or detect_double_top(data)

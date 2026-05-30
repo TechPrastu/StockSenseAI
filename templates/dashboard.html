@@ -44,7 +44,12 @@
             <section class="stock-card card">
                 <div class="ticker-hero">
                     <div class="ticker-details">
-                        <h2>{{ stock.stock_profile.company_name }}</h2>
+                        <div class="ticker-title-bar">
+                            <h2>{{ stock.stock_profile.company_name }}</h2>
+                            <span class="market-sentiment-badge sentiment-{{ stock.market_sentiment.class }}" title="Market sentiment based on latest price move">
+                                {{ stock.market_sentiment.icon }} {{ stock.market_sentiment.label }}
+                            </span>
+                        </div>
                         <div class="ticker-tags">
                             <span class="tag">NSE: {{ stock.symbol }}</span>
                             <span class="tag">{{ stock.stock_profile.industry or 'Industry' }}</span>
@@ -58,6 +63,45 @@
                             <div class="metric-chip"><strong>ROE</strong><span>{{ stock.company_essentials.roe }}</span></div>
                             <div class="metric-chip"><strong>Div Yield</strong><span>{{ stock.company_essentials.div_yield }}</span></div>
                         </div>
+                        <div class="summary-badges-row">
+                            <div class="summary-badge">
+                                <span class="badge-icon">📈</span>
+                                <div class="badge-content">
+                                    <span>52W Range</span>
+                                    <strong>{{ stock.price_summary.week_low | default('N/A') }}<br>{{ stock.price_summary.week_high | default('N/A') }}</strong>
+                                </div>
+                            </div>
+                            <div class="summary-badge">
+                                <span class="badge-icon">📊</span>
+                                <div class="badge-content">
+                                    <span>Volume</span>
+                                    <strong>{{ stock.nse_fields.get('Volume', 'N/A') if stock.nse_fields else 'N/A' }}</strong>
+                                </div>
+                            </div>
+                            <div class="summary-badge">
+                                <span class="badge-icon">⏱️</span>
+                                <div class="badge-content">
+                                    <span>Market State</span>
+                                    <strong>{{ stock.stock_profile.market_state }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stock-hero-meta">
+                            {% set pass_count = stock.value_checklist | selectattr('status', 'equalto', 'pass') | list | length %}
+                            {% set checklist_total = stock.value_checklist | length %}
+                            <div class="stock-badge">Value Score <strong>{{ pass_count }}/{{ checklist_total }}</strong></div>
+                            <div class="stock-status">{{ stock.stock_profile.market_state or 'Market' }}</div>
+                        </div>
+                        {% if stock.nse_fields %}
+                        <div class="live-data-grid">
+                            {% for label, value in stock.nse_fields.items() %}
+                                <div class="live-data-card">
+                                    <span>{{ label }}</span>
+                                    <strong>{{ value or 'N/A' }}</strong>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="ticker-performance">
                         <div class="price-block">
@@ -160,9 +204,71 @@
                         <div><strong>Exchange</strong><span>{{ stock.stock_profile.exchange or 'N/A' }}</span></div>
                         <div><strong>Website</strong><span>{{ stock.stock_profile.website or 'N/A' }}</span></div>
                     </div>
+                    <div class="value-checklist-card">
+                        <h4>Value Stock Selection Checklist</h4>
+                        <div class="checklist-summary">
+                            <div class="checklist-score">
+                                <span class="checklist-score-pill">{{ pass_count }}/{{ checklist_total }} passed</span>
+                                <span class="checklist-summary-text">{{ 'Healthy value profile' if pass_count >= checklist_total / 2 else 'Review fundamentals' }}</span>
+                            </div>
+                            <div class="checklist-progress">
+                                <span class="checklist-progress-track"><span class="checklist-progress-fill" style="width: {{ (pass_count / checklist_total) * 100 if checklist_total else 0 }}%"></span></span>
+                            </div>
+                        </div>
+                        <div class="checklist-grid">
+                            {% for item in stock.value_checklist %}
+                                <div class="checklist-item status-{{ item.status }}">
+                                    <div class="checklist-icon">
+                                        {% if item.status == 'pass' %}
+                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 0-1.414 0L8 12.586 5.707 10.293a1 1 0 1 0-1.414 1.414l3 3a1 1 0 0 0 1.414 0l8-8a1 1 0 0 0 0-1.414z" clip-rule="evenodd"/></svg>
+                                        {% elif item.status == 'fail' %}
+                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-1.414-4.414a1 1 0 0 1 1.414 0L10 14.586l1.414-1.414a1 1 0 1 1 1.414 1.414L11.414 16l1.414 1.414a1 1 0 0 1-1.414 1.414L10 17.414l-1.414 1.414a1 1 0 0 1-1.414-1.414L8.586 16 7.172 14.586a1 1 0 1 1 1.414-1.414L10 14.586z" clip-rule="evenodd"/></svg>
+                                        {% else %}
+                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-10.5a1 1 0 10-2 0 1 1 0 002 0zm-1 3.5a.75.75 0 01.75.75v.5a.75.75 0 11-1.5 0v-.5A.75.75 0 019 11z" clip-rule="evenodd"/></svg>
+                                        {% endif %}
+                                    </div>
+                                    <div class="checklist-content">
+                                        <div class="checklist-label">{{ item.label }}</div>
+                                        <div class="checklist-meta">{{ item.value_display }} <span class="checklist-threshold">{{ item.threshold_display }}</span></div>
+                                    </div>
+                                    <div class="tooltip tooltip-right">
+                                        <span class="tooltip-trigger">i</span>
+                                        <div class="tooltip-content">{{ item.tooltip }}</div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% if stock.corporate_events %}
+                    <div class=\"corporate-events-card\">
+                        <h4>Recent Corporate Events</h4>
+                        <div class=\"events-list\">
+                            {% for event in stock.corporate_events[:8] %}
+                                <div class=\"event-item event-{{ event.type|lower|replace(' ', '-') }}\">
+                                    <div class=\"event-badge\">
+                                        {% if 'Split' in event.type %}
+                                            📊
+                                        {% elif 'Dividend' in event.type %}
+                                            💰
+                                        {% else %}
+                                            📅
+                                        {% endif %}
+                                    </div>
+                                    <div class=\"event-content\">
+                                        <div class=\"event-type\">{{ event.type }}</div>
+                                        <div class=\"event-detail\">{{ event.detail }}</div>
+                                        <div class=\"event-date\">{{ event.date }}</div>
+                                    </div>
+                                    <div class=\"event-tooltip\">{{ event.description }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
 
-                <div class="stock-card__insights">
+                <div class=\"stock-card__insights\">
                     <h3>AI Insights</h3>
                     <div class="insights-grid">
                         <div class="insight-item">
@@ -195,7 +301,13 @@
 
                         <div class="insight-item">
                             <div class="insight-title">Pattern</div>
-                            <div class="insight-body">{{ insights[stock.symbol].chart_pattern }}</div>
+                            <div class="insight-body">{{ insights[stock.symbol].pattern_title or insights[stock.symbol].chart_pattern }}</div>
+                            {% if insights[stock.symbol].pattern_description %}
+                                <div class="insight-sub">{{ insights[stock.symbol].pattern_description }}</div>
+                            {% endif %}
+                            {% if insights[stock.symbol].pattern_notes %}
+                                <div class="insight-meta">Note: {{ insights[stock.symbol].pattern_notes }}</div>
+                            {% endif %}
                         </div>
                         <div class="insight-item insight-advice">
                             <div class="insight-title">Action Advice</div>
@@ -206,31 +318,37 @@
                         </div>
                     </div>
 
-                    <div class="insight-section">
-                        <h4>Latest News</h4>
-                        <ul>
-                            {% set news_list = insights[stock.symbol].news | selectattr('title') | list %}
-                            {% if news_list %}
-                                {% for news in news_list[:5] %}
-                                    <li>
-                                        <strong>{{ news.title }}</strong>
-                                        {% if news.date %}<span class="news-date">({{ news.date }})</span>{% endif %}
-                                        <p>{{ news.summary }}</p>
-                                    </li>
-                                {% endfor %}
-                            {% else %}
-                                <li>No news found.</li>
-                            {% endif %}
-                        </ul>
-                    </div>
+                    <div class="insight-sections">
+                        <div class="insight-section insight-section--panel">
+                            <h4>Latest News</h4>
+                            <ul>
+                                {% set news_list = insights[stock.symbol].news | selectattr('title') | list %}
+                                {% if news_list %}
+                                    {% for news in news_list[:5] %}
+                                        <li>
+                                            <strong>{{ news.title }}</strong>
+                                            {% if news.date %}<span class="news-date">({{ news.date }})</span>{% endif %}
+                                            <p>{{ news.summary }}</p>
+                                        </li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li>No news found.</li>
+                                {% endif %}
+                            </ul>
+                        </div>
 
-                    <div class="insight-section">
-                        <h4>Upcoming Events</h4>
-                        <ul>
-                            {% for event in insights[stock.symbol].events %}
-                                <li>{{ event.event }} on {{ event.date }}</li>
-                            {% endfor %}
-                        </ul>
+                        <div class="insight-section insight-section--panel">
+                            <h4>Upcoming Events</h4>
+                            <ul>
+                                {% if insights[stock.symbol].events %}
+                                    {% for event in insights[stock.symbol].events %}
+                                        <li>{{ event.event }} <span class="news-date">{{ event.date }}</span></li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li>No upcoming events.</li>
+                                {% endif %}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -265,6 +383,30 @@
             const yRange = chartType === 'price' && Number.isFinite(defaultLow) && Number.isFinite(defaultHigh)
                 ? [defaultLow, defaultHigh]
                 : undefined;
+            
+            // Get corporate events if available
+            const corporateEventsEl = document.querySelector(`[data-corporate-events-${symbol}]`);
+            const corporateEvents = corporateEventsEl ? JSON.parse(corporateEventsEl.textContent) : [];
+            
+            // Create shapes for corporate events on price chart
+            const shapes = [];
+            if (chartType === 'price' && corporateEvents.length > 0) {
+                corporateEvents.forEach(event => {
+                    shapes.push({
+                        type: 'line',
+                        x0: event.date,
+                        y0: defaultLow,
+                        x1: event.date,
+                        y1: defaultHigh,
+                        line: {
+                            color: event.type.includes('Split') ? 'rgba(59,189,248,0.4)' : 'rgba(34,197,94,0.4)',
+                            width: 2,
+                            dash: 'dash'
+                        }
+                    });
+                });
+            }
+            
             const layout = {
                 xaxis: {
                     type: 'date',
@@ -281,6 +423,7 @@
                     showgrid: false,
                     tickfont: { color: '#64748b' }
                 },
+                shapes: shapes,
                 margin: { t: 20, l: 40, r: 30, b: 50 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
