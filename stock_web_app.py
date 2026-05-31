@@ -127,12 +127,24 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
     yq_financial = {}
     yq_price = {}
     yq_quote = {}
+
+    def _safe_yq_section(section):
+        if isinstance(section, dict):
+            return section
+        return {}
+
     try:
-        yq_profile = yq_ticker.summary_profile.get(yf_symbol, {}) or {}
-        yq_detail = yq_ticker.summary_detail.get(yf_symbol, {}) or {}
-        yq_financial = yq_ticker.financial_data.get(yf_symbol, {}) or {}
-        yq_price = yq_ticker.price.get(yf_symbol, {}) or {}
-        yq_quote = yq_ticker.quote_type.get(yf_symbol, {}) or {}
+        raw_profile = _safe_yq_section(yq_ticker.summary_profile)
+        raw_detail = _safe_yq_section(yq_ticker.summary_detail)
+        raw_financial = _safe_yq_section(yq_ticker.financial_data)
+        raw_price = _safe_yq_section(yq_ticker.price)
+        raw_quote = _safe_yq_section(yq_ticker.quote_type)
+
+        yq_profile = _safe_yq_section(raw_profile.get(yf_symbol, {}))
+        yq_detail = _safe_yq_section(raw_detail.get(yf_symbol, {}))
+        yq_financial = _safe_yq_section(raw_financial.get(yf_symbol, {}))
+        yq_price = _safe_yq_section(raw_price.get(yf_symbol, {}))
+        yq_quote = _safe_yq_section(raw_quote.get(yf_symbol, {}))
     except Exception:
         pass
 
@@ -167,6 +179,15 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             change = None
             change_percent = None
 
+    promoter_holding_value = None
+    try:
+        if hasattr(get_nse(), 'get_quote'):
+            quote_data = get_nse().get_quote(symbol.lower())
+            if isinstance(quote_data, dict):
+                promoter_holding_value = quote_data.get('promoterHolding')
+    except Exception:
+        promoter_holding_value = None
+
     company_essentials = {
         'market_cap': format_inr_crore(yq_price.get('marketCap') or info.get('marketCap')),
         'enterprise_value': format_inr_crore(yq_financial.get('enterpriseValue')),
@@ -181,7 +202,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         'eps': safe_value(yq_financial.get('trailingEps') or info.get('trailingEps')),
         'roe': format_percent(yq_financial.get('returnOnEquity')),
         'roce': format_percent(yq_financial.get('returnOnAssets')),
-        'promoter_holding': safe_value(get_nse().get_quote(symbol.lower()).get('promoterHolding') if hasattr(get_nse(), 'get_quote') else None),
+        'promoter_holding': safe_value(promoter_holding_value),
         'sales_growth': 'N/A',
         'profit_growth': 'N/A'
     }
@@ -317,14 +338,32 @@ def dashboard():
     add_recent_search(symbol)
 
     stock_data_list = [get_stock_data(symbol, period='1y')]
+    peer_stocks = get_trending_stocks()
 
     # AI Prediction
     predictions = {}
     insights_dict = {}
     symbol_upper = symbol.upper()
-    get_stock_predictor().train(symbol_upper)
-    predictions[symbol_upper] = get_stock_predictor().predict(symbol_upper)
-    insights_dict[symbol_upper] = get_stock_predictor().get_insights(symbol_upper)
+    
+    try:
+        get_stock_predictor().train(symbol_upper)
+        predictions[symbol_upper] = get_stock_predictor().predict(symbol_upper)
+        insights_dict[symbol_upper] = get_stock_predictor().get_insights(symbol_upper)
+    except Exception as e:
+        # Gracefully handle prediction errors (delisted stocks, API failures, model not trained, etc.)
+        error_msg = str(e)
+        get_logger().warning(f"Predictor error for {symbol_upper}: {error_msg}")
+        predictions[symbol_upper] = {}
+        insights_dict[symbol_upper] = {
+            'direction': 'Data processing',
+            'direction_symbol': '⏳',
+            'confidence': None,
+            'breakout_confirmation': 'Model training in background. Check back soon.',
+            'forecast': 'Insufficient historical data for predictions',
+            'predicted_next': None,
+            'advice': 'Showing latest market data. AI insights will be available after training.',
+            'trailing_stop_pct': None
+        }
 
     return render_template(
         "dashboard.html",
@@ -332,7 +371,8 @@ def dashboard():
         theme=theme,
         stock_data_list=stock_data_list,
         predictions=predictions,
-        insights=insights_dict
+        insights=insights_dict,
+        peer_stocks=peer_stocks
     )
 
 @app.route("/chart_data")
@@ -351,7 +391,15 @@ def log_request_info():
     # get_logger().debug(f"Request data: {request.args}")
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Replace the default Flask server banner with a custom local startup message.
+    import os
+    import flask.cli
+    flask.cli.show_server_banner = lambda *args, **kwargs: None
+
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        print("StockSense AI local server starting at http://127.0.0.1:5000")
+
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
 # stock_web_app.py
 # This file is part of the StockSense AI project.
-# It provides a Flask web application to display stock data and predictions.    
+# It provides a Flask web application to display stock data and predictions.
