@@ -320,16 +320,23 @@ def get_trending_stocks():
 def home():
     theme = request.args.get("theme", "light")
     trending_stocks = get_trending_stocks()
-    return render_template("home.html", theme=theme, trending_stocks=trending_stocks)
+    market_indices = [
+        {'name': 'NIFTY 50', 'value': '23,547.75', 'change': '-359.40', 'percent': '-1.50', 'direction': 'down'},
+        {'name': 'BANK NIFTY', 'value': '54,239.20', 'change': '-614.65', 'percent': '-1.12', 'direction': 'down'},
+        {'name': 'FIN NIFTY', 'value': '25,354.00', 'change': '-398.20', 'percent': '-1.55', 'direction': 'down'},
+        {'name': 'SENSEX', 'value': '74,775.74', 'change': '-1,092.06', 'percent': '-1.44', 'direction': 'down'},
+        {'name': 'MIDCP NIFTY', 'value': '14,474.90', 'change': '-231.05', 'percent': '-1.57', 'direction': 'down'},
+    ]
+    return render_template("home.html", theme=theme, trending_stocks=trending_stocks, market_indices=market_indices)
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if request.method == "POST":
         symbol = request.form.get("symbol", "RELIANCE").strip().split(",")[0].strip()
-        theme = request.form.get("theme", "light")
+        theme = request.form.get("theme", "dark")
     else:
         symbol = request.args.get("symbol", "RELIANCE").strip().split(",")[0].strip()
-        theme = request.args.get("theme", "light")
+        theme = request.args.get("theme", "dark")
 
     if not symbol:
         symbol = "RELIANCE"

@@ -14,21 +14,38 @@
     <div class="app-shell">
         <header class="home-header card">
             <div class="home-header-left">
-                <div class="logo-section">
+                <div class="logo-nav">
                     <span class="logo-badge">StockSense AI</span>
-                    <h1 class="site-name">StockSense AI</h1>
-                    <span class="logo-text">Stock screening, analysis, and AI insights for Indian equities</span>
+                    <nav class="main-nav">
+                        <a href="/" class="nav-link active">Home</a>
+                    </nav>
                 </div>
             </div>
-            <button class="theme-toggle" type="button" onclick="toggleTheme()">🌙</button>
+            <div class="home-header-actions">
+                <button type="button" class="theme-toggle">🌙</button>
+                <button class="outline-btn small-btn">Login</button>
+                <button class="primary-btn small-btn">Open Account</button>
+            </div>
         </header>
 
         <main class="home-hero">
-            <section class="hero-container card">
+            <section class="index-grid-section">
+                <div class="index-grid card">
+                    {% for index in market_indices %}
+                    <div class="index-card {% if index.direction == 'down' %}negative{% else %}positive{% endif %}">
+                        <span class="index-name">{{ index.name }}</span>
+                        <strong class="index-value">{{ index.value }}</strong>
+                        <span class="index-change">{{ index.change }} ({{ index.percent }}%)</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="hero-container card hero-landing">
                 <div class="hero-copy">
-                    <p class="eyebrow">Stock Intelligence</p>
-                    <h1 class="hero-title">Invest smarter with AI-driven Indian stock analysis</h1>
-                    <p class="hero-subtitle">Search any NSE ticker, review fundamentals, view charts, and get model-backed insights instantly.</p>
+                    <p class="eyebrow">Stock Screener</p>
+                    <h1 class="hero-title">Stock screener for Indian stocks</h1>
+                    <p class="hero-subtitle">Built for fundamental and technical research with powerful insights and stock market screeners.</p>
 
                     <form method="GET" action="/dashboard" class="home-search-form">
                         <div class="search-wrapper autocomplete-wrapper">
@@ -36,6 +53,7 @@
                                 type="text"
                                 name="symbol"
                                 id="stock-search-input"
+                                aria-label="Search stock symbol"
                                 placeholder="Search stock by symbol (RELIANCE, TCS, INFY...)"
                                 class="home-search-input"
                                 autocomplete="off"

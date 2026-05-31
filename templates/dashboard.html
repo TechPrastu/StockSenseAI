@@ -29,7 +29,7 @@
                 <label class="search-field">
                     <span>Search stock symbol</span>
                     <div class="search-wrapper autocomplete-wrapper">
-                        <input class="home-search-input" type="text" id="dashboard-stock-search" name="symbol" value="{{ symbol }}" placeholder="RELIANCE" autocomplete="off" required>
+                        <input class="home-search-input" type="text" id="dashboard-stock-search" name="symbol" aria-label="Search stock symbol" value="{{ symbol }}" placeholder="RELIANCE" autocomplete="off" required>
                         <ul id="dashboard-search-suggestions" class="search-suggestions"></ul>
                         <button class="search-submit" type="submit">Search</button>
                     </div>
@@ -44,52 +44,107 @@
         <main class="dashboard-shell">
             {% for stock in stock_data_list %}
             <section class="dashboard-hero card">
-                <div class="hero-left">
-                    <div class="hero-tag">Stock Overview</div>
-                    <h2>{{ stock.stock_profile.company_name }}</h2>
-                    <div class="hero-tags">
-                        <span class="tag">NSE: {{ stock.symbol }}</span>
-                        <span class="tag">{{ stock.stock_profile.industry or 'Industry' }}</span>
-                        <span class="tag">{{ stock.stock_profile.exchange or 'Exchange' }}</span>
+                <div class="dashboard-summary-top">
+                    <div class="dashboard-summary-head">
+                        <div class="dashboard-summary-title">
+                            <div class="hero-tag">Stock Overview</div>
+                            <h2>{{ stock.stock_profile.company_name }}</h2>
+                            <div class="dashboard-subtitle">
+                                {% if stock.stock_profile.website %}
+                                <a href="{{ stock.stock_profile.website }}" target="_blank" rel="noopener noreferrer">{{ stock.stock_profile.website | replace('https://', '') | replace('http://', '') }}</a>
+                                <span class="divider">•</span>
+                                {% endif %}
+                                <span class="ticker-chip">NSE: {{ stock.symbol }}</span>
+                                <span class="ticker-chip">BSE: {{ stock.stock_profile.exchange or 'N/A' }}</span>
+                            </div>
+                        </div>
+                        <div class="dashboard-summary-actions">
+                            <button type="button" class="outline-btn">Export to Excel</button>
+                            <button type="button" class="primary-btn">Follow</button>
+                        </div>
                     </div>
-                    <p class="hero-description">{{ stock.stock_profile.summary or 'No summary available yet. Explore fundamentals, news, and predictions for this stock.' }}</p>
-                    <div class="hero-metrics">
-                        <div class="metric-block">
+
+                    <div class="dashboard-top-metrics">
+                        <div class="metric-card">
                             <span>Market Cap</span>
                             <strong>{{ stock.company_essentials.market_cap }}</strong>
                         </div>
-                        <div class="metric-block">
-                            <span>ROE</span>
-                            <strong>{{ stock.company_essentials.roe }}</strong>
+                        <div class="metric-card">
+                            <span>Current Price</span>
+                            <strong>₹ {{ stock.current_price | default('N/A') }}</strong>
                         </div>
-                        <div class="metric-block">
-                            <span>Div Yield</span>
-                            <strong>{{ stock.company_essentials.div_yield }}</strong>
-                        </div>
-                        <div class="metric-block">
-                            <span>Promoter Stake</span>
-                            <strong>{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong>
+                        <div class="metric-card">
+                            <span>High / Low</span>
+                            <strong>₹ {{ stock.price_summary.week_high | default('N/A') }} / ₹ {{ stock.price_summary.week_low | default('N/A') }}</strong>
                         </div>
                     </div>
                 </div>
-                <div class="hero-right">
-                    <div class="price-card">
-                        <div class="price-label">LIVE PRICE</div>
-                        <div class="price-value">₹ {{ stock.current_price | default('N/A') }}</div>
-                        <div class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
-                            {% if stock.price_change is not none %}
-                                {% if stock.price_change >= 0 %}+{% endif %}{{ stock.price_change | round(2) }}
-                                ({{ stock.price_change_percent | round(2) }}%)
-                            {% else %}
-                                N/A
-                            {% endif %}
+
+                <div class="dashboard-hero-main">
+                    <div class="hero-left">
+                        <p class="hero-description">{{ stock.stock_profile.summary or 'No summary available yet. Explore fundamentals, news, and predictions for this stock.' }}</p>
+                        <div class="hero-stat-grid">
+                            <div class="metric-card">
+                                <span>Market Cap</span>
+                                <strong>{{ stock.company_essentials.market_cap | default('N/A') }}</strong>
+                            </div>
+                            <div class="metric-card">
+                                <span>P/E Ratio</span>
+                                <strong>{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong>
+                            </div>
+                            <div class="metric-card">
+                                <span>P/B Ratio</span>
+                                <strong>{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong>
+                            </div>
+                            <div class="metric-card">
+                                <span>Promoter Stake</span>
+                                <strong>{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong>
+                            </div>
                         </div>
                     </div>
-                    <div class="hero-stats">
-                        <div class="stat-pill"><span>Market State</span><strong>{{ stock.stock_profile.market_state or 'N/A' }}</strong></div>
-                        <div class="stat-pill"><span>Last Update</span><strong>{{ stock.market_time or 'N/A' }}</strong></div>
-                        <div class="stat-pill"><span>52W High</span><strong>{{ stock.price_summary.week_high | default('N/A') }}</strong></div>
-                        <div class="stat-pill"><span>52W Low</span><strong>{{ stock.price_summary.week_low | default('N/A') }}</strong></div>
+                    <div class="hero-right">
+                        <div class="stock-summary-card card">
+                            <div class="stock-summary-header">
+                                <div>
+                                    <span class="hero-tag">Live Quote</span>
+                                    <div class="price-market-title">LIVE PRICE</div>
+                                    <div class="price-market-value">₹ {{ stock.current_price | default('N/A') }}</div>
+                                    <div class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                        {% if stock.price_change is not none %}
+                                            {% if stock.price_change >= 0 %}+{% endif %}{{ stock.price_change | round(2) }}
+                                            ({{ stock.price_change_percent | round(2) }}%)
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="stock-badge">
+                                    <span>Market State</span>
+                                    <strong>{{ stock.stock_profile.market_state or 'N/A' }}</strong>
+                                </div>
+                            </div>
+                            <div class="stock-summary-grid">
+                                <div class="summary-item">
+                                    <span>Last Update</span>
+                                    <strong>{{ stock.market_time or 'N/A' }}</strong>
+                                </div>
+                                <div class="summary-item">
+                                    <span>52W High</span>
+                                    <strong>{{ stock.price_summary.week_high | default('N/A') }}</strong>
+                                </div>
+                                <div class="summary-item">
+                                    <span>52W Low</span>
+                                    <strong>{{ stock.price_summary.week_low | default('N/A') }}</strong>
+                                </div>
+                            </div>
+                            <div class="stock-summary-footer">
+                                <span class="external-links-label">Official Exchange Pages</span>
+                                <div class="external-links-buttons">
+                                    <a href="https://www.nseindia.com/get-quote/equity/{{ stock.symbol }}/{{ stock.stock_profile.company_name | replace(' ', '-') }}" target="_blank" rel="noopener noreferrer" class="external-link-btn nse-btn" aria-label="Open NSE page for {{ stock.symbol }}">NSE</a>
+                                    <a href="https://www.bseindia.com" target="_blank" rel="noopener noreferrer" class="external-link-btn bse-btn" aria-label="Open BSE site">BSE</a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -291,6 +346,7 @@
 
         // Initialize autocomplete for dashboard search
         setupAutocomplete('dashboard-stock-search', 'dashboard-search-suggestions');
+        const chartState = {};
 
         function formatPercentValue(value) {
             return value >= 0 ? `+${value.toFixed(1)}%` : `${value.toFixed(1)}%`;
@@ -306,6 +362,13 @@
         }
 
         function renderChart(symbol, histData, chartType = 'price') {
+            if (!Array.isArray(histData) || histData.length === 0) {
+                const chartContainer = document.getElementById(`plotly-chart-${symbol}`);
+                if (chartContainer) {
+                    chartContainer.innerHTML = '<div class="chart-empty">No chart data available.</div>';
+                }
+                return;
+            }
             const dates = histData.map(row => row.Date);
             const period = chartState[symbol] && chartState[symbol].period;
             const isIntraday = period === '1d';
