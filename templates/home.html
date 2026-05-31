@@ -3,61 +3,76 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StockSense AI - Indian Stock Analysis & AI Insights</title>
+    <title>StockSense AI | NSE Stock Intelligence</title>
+    <meta name="description" content="StockSense AI provides Indian stock analysis, NSE charting, and AI-driven insights." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="light">
+<body class="{{ theme }}">
     <div class="app-shell">
-        <header class="home-header">
-            <div class="header-content">
+        <header class="home-header card">
+            <div class="home-header-left">
                 <div class="logo-section">
                     <span class="logo-badge">StockSense AI</span>
-                    <span class="theme-toggle" onclick="toggleTheme()">🌙</span>
+                    <h1 class="site-name">StockSense AI</h1>
+                    <span class="logo-text">Stock screening, analysis, and AI insights for Indian equities</span>
                 </div>
             </div>
+            <button class="theme-toggle" type="button" onclick="toggleTheme()">🌙</button>
         </header>
 
         <main class="home-hero">
-            <section class="hero-container">
-                <div class="hero-content">
-                    <h1 class="hero-title">Stock Analysis & AI Insights</h1>
-                    <p class="hero-subtitle">Real-time data, technical analysis, and AI-driven predictions for Indian stocks</p>
+            <section class="hero-container card">
+                <div class="hero-copy">
+                    <p class="eyebrow">Stock Intelligence</p>
+                    <h1 class="hero-title">Invest smarter with AI-driven Indian stock analysis</h1>
+                    <p class="hero-subtitle">Search any NSE ticker, review fundamentals, view charts, and get model-backed insights instantly.</p>
 
                     <form method="GET" action="/dashboard" class="home-search-form">
-                        <div class="search-wrapper">
-                            <input 
-                                type="text" 
-                                name="symbol" 
-                                placeholder="Search stock by symbol (RELIANCE, TCS, INFY...)" 
+                        <div class="search-wrapper autocomplete-wrapper">
+                            <input
+                                type="text"
+                                name="symbol"
+                                id="stock-search-input"
+                                placeholder="Search stock by symbol (RELIANCE, TCS, INFY...)"
                                 class="home-search-input"
+                                autocomplete="off"
                                 required
                             />
-                            <button type="submit" class="search-submit">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <path d="M9 17C13.4183 17 17 13.4183 17 9C17 4.58172 13.4183 1 9 1C4.58172 1 1 4.58172 1 9C1 13.4183 4.58172 17 9 17Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M19 19L14.65 14.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </button>
+                            <ul id="search-suggestions" class="search-suggestions"></ul>
+                            <button type="submit" class="search-submit">Explore</button>
                         </div>
                     </form>
                 </div>
+                <div class="hero-aside">
+                    <div class="stat-card">
+                        <span class="stat-label">Live NSE Research</span>
+                        <strong>Fresh stock data, ratings, and chart insights</strong>
+                    </div>
+                    <div class="stat-card secondary">
+                        <span class="stat-label">AI Predictions</span>
+                        <strong>Market direction backed by technical and statistical models</strong>
+                    </div>
+                </div>
             </section>
 
-            <section class="trending-section">
-                <div class="trending-header">
-                    <h2 class="trending-title">Explore Popular Stocks</h2>
-                    <p class="trending-subtitle">Start with these frequently analyzed companies</p>
+            <section class="trending-section card">
+                <div class="section-heading">
+                    <div>
+                        <h2>Trending Stocks</h2>
+                        <p>Popular NSE companies that other users are checking right now.</p>
+                    </div>
                 </div>
-
                 <div class="trending-grid">
                     {% for stock in trending_stocks %}
                     <a href="/dashboard?symbol={{ stock.symbol }}" class="trending-card">
-                        <div class="stock-symbol">{{ stock.symbol }}</div>
+                        <div class="trend-card-top">
+                            <div class="stock-symbol">{{ stock.symbol }}</div>
+                            <span class="stock-sector">{{ stock.sector }}</span>
+                        </div>
                         <div class="stock-name">{{ stock.name }}</div>
-                        <div class="stock-sector">{{ stock.sector }}</div>
                         <div class="stock-price-info">
                             <span class="stock-price">₹{{ stock.price }}</span>
                             <span class="stock-change {% if stock.change|float >= 0 %}positive{% else %}negative{% endif %}">
@@ -68,51 +83,78 @@
                     {% endfor %}
                 </div>
             </section>
-
-            <section class="features-section">
-                <h2 class="features-title">Why StockSense AI?</h2>
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">📊</div>
-                        <h3>Live Market Data</h3>
-                        <p>Real-time stock prices, volume, and market movements</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🤖</div>
-                        <h3>AI Insights</h3>
-                        <p>Machine learning predictions and chart pattern analysis</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📈</div>
-                        <h3>Technical Analysis</h3>
-                        <p>Interactive charts with CAGR calculations and trends</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🎯</div>
-                        <h3>Fundamentals</h3>
-                        <p>P/E ratios, ROE, market cap, and financial metrics</p>
-                    </div>
-                </div>
-            </section>
         </main>
 
         <footer class="home-footer">
+            <p><strong>StockSense AI</strong> · Indian market dashboard, AI analytics, and stock screening.</p>
             <p>&copy; 2026 StockSense AI. Real-time Indian stock analysis powered by AI.</p>
         </footer>
     </div>
 
     <script>
+        const stockList = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV', 'HINDUNILVR', 'LT', 'ASIANPAINT', 'AXISBANK', 'HCLTECH', 'ONGC', 'CDSL', 'WIPRO', 'MARUTI', 'BHARTIARTL', 'SBIN', 'ICICIBANK', 'KOTAKBANK', 'BAJAJFINSV', 'SUNPHARMA', 'TECHM', 'POWERGRID', 'JSWSTEEL', 'ADANIGREEN', 'TATASTEEL', 'GRASIM', 'BPCL', 'IOCL', 'APOLLOHOSP', 'DRREDDY'];
+
+        function setupAutocomplete(inputId, suggestionsId) {
+            const inputField = document.getElementById(inputId);
+            const suggestionsList = document.getElementById(suggestionsId);
+
+            if (!inputField || !suggestionsList) return;
+
+            inputField.addEventListener('input', (e) => {
+                const query = e.target.value.toUpperCase().trim();
+                suggestionsList.innerHTML = '';
+
+                if (query.length === 0) {
+                    suggestionsList.style.display = 'none';
+                    return;
+                }
+
+                const matches = stockList.filter(stock => stock.includes(query)).slice(0, 8);
+
+                if (matches.length > 0) {
+                    suggestionsList.style.display = 'block';
+                    matches.forEach(stock => {
+                        const li = document.createElement('li');
+                        li.className = 'suggestion-item';
+                        li.textContent = stock;
+                        li.onclick = () => {
+                            inputField.value = stock;
+                            suggestionsList.innerHTML = '';
+                            suggestionsList.style.display = 'none';
+                        };
+                        suggestionsList.appendChild(li);
+                    });
+                } else {
+                    suggestionsList.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (e.target !== inputField && e.target !== suggestionsList && !suggestionsList.contains(e.target)) {
+                    suggestionsList.style.display = 'none';
+                }
+            });
+        }
+
+        // Initialize autocomplete
+        setupAutocomplete('stock-search-input', 'search-suggestions');
+
         function toggleTheme() {
             const body = document.body;
             body.classList.toggle('dark');
-            localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+            body.classList.toggle('light');
+            const active = body.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('theme', active);
+            document.querySelectorAll('.theme-toggle').forEach(btn => btn.textContent = active === 'dark' ? '☀️' : '🌙');
         }
 
-        // Load theme preference
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        if (savedTheme === 'dark') {
-            document.body.classList.add('dark');
-        }
+        const savedTheme = localStorage.getItem('theme') || '{{ theme or "light" }}';
+        document.body.classList.remove('light', 'dark');
+        document.body.classList.add(savedTheme);
+        document.querySelectorAll('.theme-toggle').forEach(btn => {
+            btn.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        });
+        document.title = 'StockSense AI | NSE Stock Intelligence';
     </script>
 </body>
 </html>
