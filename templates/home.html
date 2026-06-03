@@ -39,6 +39,7 @@
                             <span class="index-arrow">{% if index.direction == 'down' %}▼{% else %}▲{% endif %}</span>
                             {{ index.change }} ({{ index.percent }}%)
                         </span>
+                        <span class="index-updated" id="index-updated-{{ index.id }}">{{ index.updated_at or '--' }}</span>
                     </div>
                     {% endfor %}
                     <div class="index-loading-overlay hidden" id="index-loading-overlay">Updating live indexes…</div>
@@ -119,6 +120,7 @@
                                 {% if stock.change|float >= 0 %}+{% endif %}{{ stock.change }}%
                             </span>
                         </div>
+                        <div class="stock-updated" id="stock-updated-{{ stock.symbol }}">{{ stock.updated_at or '--' }}</div>
                     </a>
                     {% endfor %}
                 </div>
@@ -282,37 +284,71 @@
         function updateIndexCard(indexId, data) {
             const priceEl = document.getElementById(`index-price-${indexId}`);
             const changeEl = document.getElementById(`index-change-${indexId}`);
+            const updatedEl = document.getElementById(`index-updated-${indexId}`);
             const cardEl = document.querySelector(`.index-card[data-index-id="${indexId}"]`);
             if (!priceEl || !changeEl || !cardEl) return;
 
-            const isPositive = data.raw_change >= 0;
+            const hasNumericChange = typeof data.raw_change === 'number' && Number.isFinite(data.raw_change);
+            const isPositive = hasNumericChange ? data.raw_change >= 0 : false;
 
             priceEl.textContent = data.last || 'N/A';
-            changeEl.innerHTML = `<span class="index-arrow">${isPositive ? '▲' : '▼'}</span> ${data.change} (${data.percent}%)`;
-            changeEl.classList.toggle('positive', isPositive);
-            changeEl.classList.toggle('negative', !isPositive);
-            cardEl.classList.toggle('positive', isPositive);
-            cardEl.classList.toggle('negative', !isPositive);
+            changeEl.innerHTML = `<span class="index-arrow">${hasNumericChange ? (isPositive ? '▲' : '▼') : ''}</span> ${data.change} (${data.percent}%)`;
+            changeEl.classList.toggle('positive', hasNumericChange && isPositive);
+            changeEl.classList.toggle('negative', hasNumericChange && !isPositive);
+            cardEl.classList.toggle('positive', hasNumericChange && isPositive);
+            cardEl.classList.toggle('negative', hasNumericChange && !isPositive);
+
+            if (updatedEl) {
+                updatedEl.textContent = data.updated_at || '--';
+            }
         }
 
-        function refreshHomeIndexData() {
-            setIndexLoading(true);
-            fetch('/index_data')
+        function refreshHomeIndexData(showLoader = false) {
+            if (showLoader) {
+                setIndexLoading(true);
+            }
+            return fetch(`/index_data?ts=${Date.now()}`, { cache: 'no-store' })
                 .then(response => response.ok ? response.json() : Promise.reject(response))
-                .then(data => {
-                    Object.entries(data).forEach(([indexId, indexData]) => {
+                .then(payload => {
+                    const indices = payload.indices || payload;
+                    Object.entries(indices).forEach(([indexId, indexData]) => {
                         updateIndexCard(indexId, indexData);
                     });
+                    return Boolean(payload.market_open);
                 })
-                .catch(console.error)
+                .catch((error) => {
+                    console.error(error);
+                    return false;
+                })
                 .finally(() => {
-                    setIndexLoading(false);
+                    if (showLoader) {
+                        setIndexLoading(false);
+                    }
+                });
+        }
+
+        let indexRefreshTimerId = null;
+        const INDEX_OPEN_POLL_MS = 1000;
+        const INDEX_CLOSED_POLL_MS = 30000;
+
+        function scheduleNextIndexRefresh(delayMs) {
+            if (indexRefreshTimerId) {
+                clearTimeout(indexRefreshTimerId);
+            }
+            indexRefreshTimerId = setTimeout(runIndexRefreshLoop, delayMs);
+        }
+
+        function runIndexRefreshLoop(showLoader = false) {
+            refreshHomeIndexData(showLoader)
+                .then((isMarketOpen) => {
+                    scheduleNextIndexRefresh(isMarketOpen ? INDEX_OPEN_POLL_MS : INDEX_CLOSED_POLL_MS);
                 });
         }
 
         function updateTrendingCard(symbol, data) {
             const priceEl = document.getElementById(`stock-price-${symbol}`);
             const changeEl = document.getElementById(`stock-change-${symbol}`);
+            const updatedEl = document.getElementById(`stock-updated-${symbol}`);
             if (!priceEl || !changeEl) return;
 
             const change = data.price_change;
@@ -325,6 +361,9 @@
             changeEl.innerHTML = `<span class="stock-arrow">${hasChange ? (change >= 0 ? '▲' : '▼') : ''}</span> ${formattedChange}`;
             changeEl.classList.toggle('positive', direction === 'positive');
             changeEl.classList.toggle('negative', direction === 'negative');
+            if (updatedEl) {
+                updatedEl.textContent = data.value_updated_at || '--';
+            }
         }
 
         function refreshTrendingStocks() {
@@ -343,9 +382,8 @@
         }
 
         function startHomeLiveUpdates() {
-            refreshHomeIndexData();
+            runIndexRefreshLoop(true);
             refreshTrendingStocks();
-            setInterval(refreshHomeIndexData, 30000);
             setInterval(refreshTrendingStocks, 30000);
         }
 

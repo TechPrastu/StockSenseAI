@@ -832,6 +832,12 @@ body.dark .dashboard-form input {
     font-weight: 600;
 }
 
+.index-updated {
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+}
+
 .hero-container {
     display: grid;
     grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
@@ -1615,6 +1621,12 @@ body.dark .trending-card {
 
 .stock-change.negative {
     color: var(--danger);
+}
+
+.stock-updated {
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
 }
 
 .features-section {

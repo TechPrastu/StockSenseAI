@@ -1,10 +1,64 @@
 from flask import Flask, render_template, request, jsonify
+from datetime import datetime, time, timezone, timedelta
+import threading
+import time as time_module
+import json
+from pathlib import Path
+import os
+import contextlib
 
 app = Flask(__name__)
 _nse = None
 _stock_predictor = None
 _logger = None
 _recent_searches = []  # Store recent search history
+_nse_exchange_calendar = None
+_index_cache_lock = threading.Lock()
+_index_cache = {
+    'market_open': False,
+    'indices': {},
+    'server_time': ''
+}
+_index_updater_thread = None
+_stock_cache_lock = threading.Lock()
+_stock_cache = {}
+_stock_updater_threads = {}
+_search_store_lock = threading.Lock()
+_search_store = None
+
+TOP_SEARCHED_FILE = Path(__file__).resolve().parent / 'data' / 'top_searched_stocks.json'
+DEFAULT_TRENDING_STOCKS = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV']
+STOCK_BASE_METADATA = {
+    'RELIANCE': {'name': 'Reliance', 'sector': 'Energy'},
+    'TCS': {'name': 'Tata Consultancy', 'sector': 'IT'},
+    'INFY': {'name': 'Infosys', 'sector': 'IT'},
+    'HDFC': {'name': 'HDFC Bank', 'sector': 'Banking'},
+    'BAJAJFINSV': {'name': 'Bajaj Finance', 'sector': 'Finance'},
+    'HINDUNILVR': {'name': 'HUL', 'sector': 'FMCG'},
+    'LT': {'name': 'Larsen & Toubro', 'sector': 'Engineering'},
+    'ASIANPAINT': {'name': 'Asian Paints', 'sector': 'Chemicals'},
+    'AXISBANK': {'name': 'Axis Bank', 'sector': 'Banking'},
+    'HCLTECH': {'name': 'HCL Tech', 'sector': 'IT'},
+    'ONGC': {'name': 'ONGC', 'sector': 'Energy'},
+    'CDSL': {'name': 'CDSL', 'sector': 'Financial Services'},
+    'BSE': {'name': 'BSE Limited', 'sector': 'Financial Services'},
+    'WIPRO': {'name': 'Wipro', 'sector': 'IT'},
+    'ICICIBANK': {'name': 'ICICI Bank', 'sector': 'Banking'},
+    'SBIN': {'name': 'State Bank of India', 'sector': 'Banking'}
+}
+
+
+def _is_production_mode():
+    return os.environ.get('STOCKSENSE_ENV', '').lower() == 'production'
+
+
+def _run_yf_call(callable_obj, *args, **kwargs):
+    """Run yfinance calls with stderr suppression only in production mode."""
+    if not _is_production_mode():
+        return callable_obj(*args, **kwargs)
+
+    with open(os.devnull, 'w', encoding='utf-8') as devnull, contextlib.redirect_stderr(devnull):
+        return callable_obj(*args, **kwargs)
 
 def get_logger():
     global _logger
@@ -30,12 +84,114 @@ def get_stock_predictor():
 def add_recent_search(symbol):
     """Add a symbol to recent searches, keeping only unique entries."""
     global _recent_searches
-    symbol_upper = symbol.upper()
+    symbol_upper = _normalize_symbol(symbol)
+    if not symbol_upper:
+        return
+
     if symbol_upper in _recent_searches:
         _recent_searches.remove(symbol_upper)
     _recent_searches.insert(0, symbol_upper)
     # Keep only the most recent 10 searches
     _recent_searches[:] = _recent_searches[:10]
+    _record_search(symbol_upper)
+
+
+def _ensure_search_store_loaded():
+    global _search_store
+    with _search_store_lock:
+        if _search_store is not None:
+            return
+
+        loaded = {}
+        try:
+            if TOP_SEARCHED_FILE.exists():
+                data = json.loads(TOP_SEARCHED_FILE.read_text(encoding='utf-8'))
+                if isinstance(data, dict):
+                    loaded = {str(k).upper(): v for k, v in data.items() if isinstance(v, dict)}
+        except Exception:
+            loaded = {}
+
+        _search_store = loaded
+
+
+def _persist_search_store_locked():
+    TOP_SEARCHED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TOP_SEARCHED_FILE.write_text(json.dumps(_search_store, indent=2), encoding='utf-8')
+
+
+def _record_search(symbol):
+    symbol_upper = _normalize_symbol(symbol)
+    if not symbol_upper:
+        return
+
+    _ensure_search_store_loaded()
+    with _search_store_lock:
+        entry = _search_store.get(symbol_upper, {})
+        entry['count'] = int(entry.get('count', 0)) + 1
+        entry['last_searched_at'] = _current_ist_time_str()
+        if 'fallback' not in entry:
+            entry['fallback'] = {
+                'name': STOCK_BASE_METADATA.get(symbol_upper, {}).get('name', symbol_upper),
+                'sector': STOCK_BASE_METADATA.get(symbol_upper, {}).get('sector', 'N/A'),
+                'price': 'N/A',
+                'change': '0.00',
+                'updated_at': '--'
+            }
+        _search_store[symbol_upper] = entry
+        _persist_search_store_locked()
+
+
+def _update_fallback_snapshot(symbol, stock_info):
+    symbol_upper = _normalize_symbol(symbol)
+    if not symbol_upper:
+        return
+
+    _ensure_search_store_loaded()
+    with _search_store_lock:
+        entry = _search_store.get(symbol_upper, {})
+        entry['fallback'] = {
+            'name': stock_info.get('name', STOCK_BASE_METADATA.get(symbol_upper, {}).get('name', symbol_upper)),
+            'sector': stock_info.get('sector', STOCK_BASE_METADATA.get(symbol_upper, {}).get('sector', 'N/A')),
+            'price': stock_info.get('price', 'N/A'),
+            'change': stock_info.get('change', '0.00'),
+            'updated_at': _current_ist_time_str()
+        }
+        entry['last_updated_at'] = _current_ist_time_str()
+        entry['count'] = int(entry.get('count', 0))
+        _search_store[symbol_upper] = entry
+        _persist_search_store_locked()
+
+
+def get_top_searched_symbols(limit=5):
+    _ensure_search_store_loaded()
+    with _search_store_lock:
+        ranked = sorted(
+            _search_store.items(),
+            key=lambda item: (-int(item[1].get('count', 0)), item[0])
+        )
+        symbols = [symbol for symbol, _ in ranked[:limit]]
+
+    if symbols:
+        return symbols
+    return DEFAULT_TRENDING_STOCKS[:limit]
+
+
+def _build_dynamic_fallback_data(symbols):
+    _ensure_search_store_loaded()
+    fallback = {}
+    with _search_store_lock:
+        for symbol in symbols:
+            symbol_upper = _normalize_symbol(symbol)
+            entry = _search_store.get(symbol_upper, {})
+            entry_fallback = entry.get('fallback', {}) if isinstance(entry.get('fallback', {}), dict) else {}
+            fallback[symbol_upper] = {
+                'name': entry_fallback.get('name', STOCK_BASE_METADATA.get(symbol_upper, {}).get('name', symbol_upper)),
+                'sector': entry_fallback.get('sector', STOCK_BASE_METADATA.get(symbol_upper, {}).get('sector', 'N/A')),
+                'price': entry_fallback.get('price', 'N/A'),
+                'change': entry_fallback.get('change', '0.00'),
+                'updated_at': entry_fallback.get('updated_at', '--')
+            }
+    return fallback
 
 def format_inr(value):
     if value is None:
@@ -70,6 +226,187 @@ def safe_value(value, default='N/A'):
     return default if value is None else value
 
 
+def _normalize_symbol(symbol):
+    return (symbol or '').strip().split(',')[0].strip().upper()
+
+
+def _normalize_period(period):
+    return (period or '1y').strip().lower()
+
+
+def _stock_cache_key(symbol, period):
+    return (_normalize_symbol(symbol), _normalize_period(period))
+
+
+def _build_stock_payload(stock):
+    return {
+        'symbol': stock['symbol'],
+        'hist_json': stock['hist_json'],
+        'current_price': stock['current_price'],
+        'previous_close': stock['previous_close'],
+        'price_change': stock['price_change'],
+        'price_change_percent': stock['price_change_percent'],
+        'market_time': stock['market_time'],
+        'value_updated_at': stock.get('market_time') or '--',
+        'price_summary': stock['price_summary'],
+        'company_essentials': stock['company_essentials'],
+        'stock_profile': stock['stock_profile'],
+        'server_time': _current_ist_time_str()
+    }
+
+
+def _build_empty_stock_payload(symbol):
+    """Safe payload shape returned when upstream market APIs are temporarily unavailable."""
+    symbol_upper = _normalize_symbol(symbol)
+    base_meta = STOCK_BASE_METADATA.get(symbol_upper, {})
+    return {
+        'symbol': symbol_upper,
+        'hist_json': [],
+        'current_price': None,
+        'previous_close': None,
+        'price_change': None,
+        'price_change_percent': None,
+        'market_time': '',
+        'value_updated_at': '--',
+        'price_summary': {
+            'today_high': None,
+            'today_low': None,
+            'week_high': None,
+            'week_low': None
+        },
+        'company_essentials': {
+            'market_cap': 'N/A',
+            'enterprise_value': 'N/A',
+            'no_of_shares': 'N/A',
+            'pe_ratio': 'N/A',
+            'pb_ratio': 'N/A',
+            'face_value': 'N/A',
+            'div_yield': 'N/A',
+            'book_value': 'N/A',
+            'cash': 'N/A',
+            'debt': 'N/A',
+            'eps': 'N/A',
+            'roe': 'N/A',
+            'roce': 'N/A',
+            'promoter_holding': 'N/A',
+            'sales_growth': 'N/A',
+            'profit_growth': 'N/A'
+        },
+        'stock_profile': {
+            'company_name': base_meta.get('name', symbol_upper),
+            'sector': base_meta.get('sector', 'N/A'),
+            'industry': 'N/A',
+            'summary': '',
+            'website': '',
+            'exchange': 'NSE',
+            'market_state': ''
+        },
+        'server_time': _current_ist_time_str(),
+        'error': 'Live quote temporarily unavailable'
+    }
+
+
+def _refresh_stock_cache_once(symbol, period):
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_period = _normalize_period(period)
+
+    if not normalized_symbol:
+        raise ValueError('Invalid symbol')
+
+    stock = get_stock_data(normalized_symbol, period=normalized_period)
+    payload = _build_stock_payload(stock)
+
+    with _stock_cache_lock:
+        previous_payload = _stock_cache.get((normalized_symbol, normalized_period), {})
+
+    prev_value_signature = (
+        previous_payload.get('current_price'),
+        previous_payload.get('previous_close'),
+        previous_payload.get('price_change'),
+        previous_payload.get('price_change_percent')
+    )
+    curr_value_signature = (
+        payload.get('current_price'),
+        payload.get('previous_close'),
+        payload.get('price_change'),
+        payload.get('price_change_percent')
+    )
+
+    exchange_time = payload.get('market_time')
+    previous_value_time = previous_payload.get('value_updated_at')
+
+    if curr_value_signature != prev_value_signature:
+        payload['value_updated_at'] = exchange_time or _current_ist_time_str()
+    else:
+        payload['value_updated_at'] = previous_value_time or exchange_time or '--'
+
+    with _stock_cache_lock:
+        _stock_cache[(normalized_symbol, normalized_period)] = payload
+
+    return payload
+
+
+def _stock_updater_loop(symbol, period):
+    normalized_symbol = _normalize_symbol(symbol)
+    normalized_period = _normalize_period(period)
+
+    while True:
+        try:
+            _refresh_stock_cache_once(normalized_symbol, normalized_period)
+            sleep_seconds = 1 if is_indian_market_open() else 30
+        except Exception:
+            sleep_seconds = 5
+        time_module.sleep(sleep_seconds)
+
+
+def ensure_stock_updater_started(symbol, period='1y'):
+    key = _stock_cache_key(symbol, period)
+    normalized_symbol, normalized_period = key
+
+    if not normalized_symbol:
+        return
+
+    with _stock_cache_lock:
+        worker = _stock_updater_threads.get(key)
+        if worker and worker.is_alive():
+            return
+
+        worker = threading.Thread(
+            target=_stock_updater_loop,
+            args=(normalized_symbol, normalized_period),
+            name=f'stock-cache-updater-{normalized_symbol}-{normalized_period}',
+            daemon=True
+        )
+        _stock_updater_threads[key] = worker
+        worker.start()
+
+
+def get_stock_payload_snapshot(symbol, period='1y'):
+    key = _stock_cache_key(symbol, period)
+    normalized_symbol, normalized_period = key
+
+    if not normalized_symbol:
+        raise ValueError('Invalid symbol')
+
+    ensure_stock_updater_started(normalized_symbol, normalized_period)
+
+    with _stock_cache_lock:
+        payload = _stock_cache.get(key)
+
+    if payload:
+        return payload
+
+    # First request fallback before thread completes initial cycle.
+    try:
+        return _refresh_stock_cache_once(normalized_symbol, normalized_period)
+    except Exception:
+        with _stock_cache_lock:
+            payload = _stock_cache.get(key)
+        if payload:
+            return payload
+        return _build_empty_stock_payload(normalized_symbol)
+
+
 def get_stock_data(symbol, period='7d', table_period='7d'):
     import yfinance as yf
     from yahooquery import Ticker
@@ -94,7 +431,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
     try:
         if period == '1d':
             # request intraday bars (5 minute) for a clearer 1-day chart
-            hist = ticker.history(period='1d', interval='5m').reset_index()
+            hist = _run_yf_call(ticker.history, period='1d', interval='5m').reset_index()
             if 'Datetime' in hist.columns:
                 date_series = pd.to_datetime(hist['Datetime'])
             else:
@@ -106,7 +443,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             date_series = date_series.dt.tz_convert('Asia/Kolkata')
             hist['Date'] = date_series.dt.strftime('%Y-%m-%d %H:%M:%S')
         else:
-            hist = ticker.history(period=yf_period).reset_index()
+            hist = _run_yf_call(ticker.history, period=yf_period).reset_index()
             hist['Date'] = pd.to_datetime(hist['Date']).dt.strftime('%Y-%m-%d')
     except Exception:
         # fallback to a safe empty DataFrame structure
@@ -121,7 +458,10 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
     hist_data = hist[['Date', 'Close', 'Volume']].to_dict(orient='records')
 
     # Info
-    info = ticker.info
+    try:
+        info = _run_yf_call(lambda: ticker.info) or {}
+    except Exception:
+        info = {}
     yq_profile = {}
     yq_detail = {}
     yq_financial = {}
@@ -218,6 +558,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
     }
 
     # NSE live data
+    nse_market_time = ''
     try:
         nse_data = get_nse().get_quote(symbol.lower())
         nse_info = {
@@ -228,6 +569,12 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             '52 Week Low': nse_data.get('low52'),
             'Volume': nse_data.get('quantityTraded')
         }
+        nse_market_time = (
+            nse_data.get('lastUpdateTime')
+            or nse_data.get('lastUpdate')
+            or nse_data.get('tradeTime')
+            or ''
+        )
         nse_current_price = _safe_float(nse_data.get('lastPrice') or nse_data.get('ltp'))
         nse_previous_close = _safe_float(nse_data.get('previousClose') or nse_data.get('prevClose'))
         if current_price is None and nse_current_price is not None:
@@ -238,7 +585,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         nse_info = {}
 
     # If market time is numeric, convert to India time string.
-    market_time = yq_price.get('regularMarketTime') or ''
+    market_time = yq_price.get('regularMarketTime') or info.get('regularMarketTime') or ''
     if isinstance(market_time, (int, float)) and market_time > 0:
         from datetime import datetime, timezone, timedelta
         india_tz = timezone(timedelta(hours=5, minutes=30))
@@ -246,6 +593,9 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             market_time = datetime.fromtimestamp(market_time, tz=timezone.utc).astimezone(india_tz).strftime('%Y-%m-%d %H:%M %Z')
         except Exception:
             market_time = str(market_time)
+
+    if not market_time:
+        market_time = nse_market_time or ''
 
     return {
         'symbol': symbol.upper(),
@@ -264,61 +614,42 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
 
 def get_trending_stocks():
     """Fetch trending stocks data for the home page based on recent searches."""
-    global _recent_searches
-    
-    # Default fallback stocks
-    default_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV']
-    
-    # Use recent searches if available, otherwise use defaults
-    trending_symbols = _recent_searches[:5] if _recent_searches else default_stocks[:5]
-    
-    # Fallback data for all possible stocks
-    fallback_data = {
-        'RELIANCE': {'name': 'Reliance', 'sector': 'Energy', 'price': '3050.00', 'change': '2.50'},
-        'TCS': {'name': 'Tata Consultancy', 'sector': 'IT', 'price': '3820.00', 'change': '-1.20'},
-        'INFY': {'name': 'Infosys', 'sector': 'IT', 'price': '1890.00', 'change': '1.80'},
-        'HDFC': {'name': 'HDFC Bank', 'sector': 'Banking', 'price': '2120.00', 'change': '0.95'},
-        'BAJAJFINSV': {'name': 'Bajaj Finance', 'sector': 'Finance', 'price': '1580.00', 'change': '-0.50'},
-        'HINDUNILVR': {'name': 'HUL', 'sector': 'FMCG', 'price': '2290.00', 'change': '1.30'},
-        'LT': {'name': 'Larsen & Toubro', 'sector': 'Engineering', 'price': '3210.00', 'change': '2.10'},
-        'ASIANPAINT': {'name': 'Asian Paints', 'sector': 'Chemicals', 'price': '3150.00', 'change': '-0.80'},
-        'AXISBANK': {'name': 'Axis Bank', 'sector': 'Banking', 'price': '1190.00', 'change': '1.50'},
-        'HCLTECH': {'name': 'HCL Tech', 'sector': 'IT', 'price': '1620.00', 'change': '0.70'},
-        'ONGC': {'name': 'ONGC', 'sector': 'Energy', 'price': '315.00', 'change': '1.20'},
-        'CDSL': {'name': 'CDSL', 'sector': 'Financial Services', 'price': '1186.20', 'change': '0.32'},
-        'BSE': {'name': 'BSE Limited', 'sector': 'Financial Services', 'price': '3888.80', 'change': '0.96'},
-        'WIPRO': {'name': 'Wipro', 'sector': 'IT', 'price': '520.00', 'change': '0.75'},
-        'ICICIBANK': {'name': 'ICICI Bank', 'sector': 'Banking', 'price': '940.00', 'change': '-0.40'},
-        'SBIN': {'name': 'State Bank of India', 'sector': 'Banking', 'price': '720.00', 'change': '0.60'},
-    }
-    
+    trending_symbols = get_top_searched_symbols(limit=5)
+    fallback_data = _build_dynamic_fallback_data(trending_symbols)
+
     trending = []
     for symbol in trending_symbols:
-        stock_info = fallback_data.get(symbol)
-        if stock_info is None:
-            try:
-                live_stock = get_stock_data(symbol, period='7d')
-                current_price = live_stock.get('current_price')
-                change_pct = live_stock.get('price_change_percent')
-                stock_info = {
-                    'name': live_stock['stock_profile'].get('company_name', symbol),
-                    'sector': live_stock['stock_profile'].get('sector', 'N/A'),
-                    'price': f"{current_price:.2f}" if isinstance(current_price, (int, float)) else 'N/A',
-                    'change': f"{change_pct * 100:.2f}" if isinstance(change_pct, (int, float)) else '0.00'
-                }
-            except Exception:
-                stock_info = {
-                    'name': symbol,
-                    'sector': 'N/A',
-                    'price': 'N/A',
-                    'change': '0.00'
-                }
+        symbol_upper = _normalize_symbol(symbol)
+        stock_info = fallback_data.get(symbol_upper, {
+            'name': STOCK_BASE_METADATA.get(symbol_upper, {}).get('name', symbol_upper),
+            'sector': STOCK_BASE_METADATA.get(symbol_upper, {}).get('sector', 'N/A'),
+            'price': 'N/A',
+            'change': '0.00',
+            'updated_at': '--'
+        })
+
+        try:
+            live_stock = get_stock_payload_snapshot(symbol_upper, period='7d')
+            current_price = live_stock.get('current_price')
+            change_pct = live_stock.get('price_change_percent')
+            stock_info = {
+                'name': live_stock['stock_profile'].get('company_name', symbol_upper),
+                'sector': live_stock['stock_profile'].get('sector', 'N/A'),
+                'price': f"{current_price:.2f}" if isinstance(current_price, (int, float)) else 'N/A',
+                'change': f"{change_pct * 100:.2f}" if isinstance(change_pct, (int, float)) else '0.00',
+                'updated_at': live_stock.get('value_updated_at', '--')
+            }
+            _update_fallback_snapshot(symbol_upper, stock_info)
+        except Exception:
+            pass
+
         trending.append({
-            'symbol': symbol,
+            'symbol': symbol_upper,
             'name': stock_info['name'],
             'sector': stock_info['sector'],
             'price': stock_info['price'],
             'change': stock_info['change'],
+            'updated_at': stock_info.get('updated_at', '--'),
         })
 
     return trending
@@ -331,6 +662,214 @@ def _safe_float(value):
         return float(value)
     except Exception:
         return None
+
+
+def _format_ist_time_from_epoch(epoch_seconds):
+    """Convert epoch seconds to HH:MM:SS IST format."""
+    try:
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        ts = float(epoch_seconds)
+        return datetime.fromtimestamp(ts, tz=timezone.utc).astimezone(ist_tz).strftime('%H:%M:%S IST')
+    except Exception:
+        return None
+
+
+def _current_ist_time_str():
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(timezone.utc).astimezone(ist_tz).strftime('%H:%M:%S IST')
+
+
+def _refresh_index_cache_once():
+    market_open = is_indian_market_open()
+    fresh_indices = fetch_index_quote_data()
+
+    with _index_cache_lock:
+        previous_indices = _index_cache.get('indices', {})
+
+    indices = {}
+    now_ist = _current_ist_time_str()
+    for index_id, index_info in fresh_indices.items():
+        previous = previous_indices.get(index_id, {})
+        prev_signature = (
+            previous.get('last'),
+            previous.get('change'),
+            previous.get('percent')
+        )
+        curr_signature = (
+            index_info.get('last'),
+            index_info.get('change'),
+            index_info.get('percent')
+        )
+
+        api_time = index_info.get('api_time')
+        prev_updated_at = previous.get('updated_at')
+
+        if curr_signature != prev_signature:
+            updated_at = api_time or now_ist
+        else:
+            updated_at = prev_updated_at or api_time or '--'
+
+        merged = dict(index_info)
+        merged['updated_at'] = updated_at
+        merged.pop('api_time', None)
+        indices[index_id] = merged
+
+    payload = {
+        'market_open': market_open,
+        'indices': indices,
+        'server_time': _current_ist_time_str()
+    }
+    with _index_cache_lock:
+        _index_cache.update(payload)
+    return payload
+
+
+def _index_updater_loop():
+    """Background updater that keeps index cache fresh for low-latency API responses."""
+    while True:
+        try:
+            payload = _refresh_index_cache_once()
+            sleep_seconds = 1 if payload.get('market_open') else 30
+        except Exception:
+            sleep_seconds = 5
+        time_module.sleep(sleep_seconds)
+
+
+def ensure_index_updater_started():
+    global _index_updater_thread
+    if _index_updater_thread and _index_updater_thread.is_alive():
+        return
+
+    with _index_cache_lock:
+        if _index_updater_thread and _index_updater_thread.is_alive():
+            return
+
+        _index_updater_thread = threading.Thread(
+            target=_index_updater_loop,
+            name='index-cache-updater',
+            daemon=True
+        )
+        _index_updater_thread.start()
+
+
+def get_index_payload_snapshot():
+    ensure_index_updater_started()
+
+    with _index_cache_lock:
+        has_data = bool(_index_cache.get('indices'))
+        payload = dict(_index_cache)
+
+    if has_data:
+        return payload
+
+    # First request fallback before thread completes initial cycle.
+    return _refresh_index_cache_once()
+
+
+def get_nse_exchange_calendar():
+    """Lazily load NSE trading calendar used for holiday/session checks."""
+    global _nse_exchange_calendar
+    if _nse_exchange_calendar is None:
+        try:
+            import exchange_calendars as xcals
+            _nse_exchange_calendar = xcals.get_calendar("XNSE")
+        except Exception:
+            # If calendar lib is unavailable, keep a disabled sentinel.
+            _nse_exchange_calendar = False
+    return _nse_exchange_calendar
+
+
+def is_nse_trading_holiday(date_ist):
+    """Return True if date is a non-session day on NSE (includes exchange holidays)."""
+    calendar = get_nse_exchange_calendar()
+    if not calendar:
+        return False
+
+    try:
+        import pandas as pd
+        session_label = pd.Timestamp(date_ist)
+        return not calendar.is_session(session_label)
+    except Exception:
+        return False
+
+
+def is_indian_market_open(now_utc=None):
+    """Return True during regular NSE/BSE cash session hours (Mon-Fri, 09:15-15:30 IST), excluding exchange holidays."""
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc)
+
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+    now_ist = now_utc.astimezone(ist_tz)
+
+    if now_ist.weekday() >= 5:
+        return False
+
+    if is_nse_trading_holiday(now_ist.date()):
+        return False
+
+    market_open_time = time(9, 15)
+    market_close_time = time(15, 30)
+    return market_open_time <= now_ist.time() <= market_close_time
+
+
+def _fetch_sensex_quote():
+    """Fetch SENSEX with multiple fallbacks because yfinance.info can be stale/intermittent."""
+    import yfinance as yf
+
+    ticker = yf.Ticker('^BSESN')
+    quote = {
+        'last': None,
+        'previousClose': None,
+        'percentChange': None,
+        'variation': None,
+        'marketTime': None
+    }
+
+    try:
+        fast_info = getattr(ticker, 'fast_info', {}) or {}
+        quote['last'] = _safe_float(fast_info.get('lastPrice') or fast_info.get('last_price'))
+        quote['previousClose'] = _safe_float(fast_info.get('previousClose') or fast_info.get('previous_close'))
+    except Exception:
+        pass
+
+    try:
+        if quote['last'] is None:
+            intraday = _run_yf_call(ticker.history, period='1d', interval='1m')
+            if intraday is not None and not intraday.empty and 'Close' in intraday:
+                last_close = intraday['Close'].dropna()
+                if not last_close.empty:
+                    quote['last'] = _safe_float(last_close.iloc[-1])
+
+        if quote['previousClose'] is None:
+            daily = _run_yf_call(ticker.history, period='5d', interval='1d')
+            if daily is not None and not daily.empty and 'Close' in daily:
+                daily_close = daily['Close'].dropna()
+                if len(daily_close) >= 2:
+                    quote['previousClose'] = _safe_float(daily_close.iloc[-2])
+                elif len(daily_close) == 1:
+                    quote['previousClose'] = _safe_float(daily_close.iloc[-1])
+    except Exception:
+        pass
+
+    try:
+        if quote['last'] is None or quote['previousClose'] is None:
+            info = _run_yf_call(lambda: ticker.info) or {}
+            quote['last'] = quote['last'] or _safe_float(info.get('regularMarketPrice'))
+            quote['previousClose'] = quote['previousClose'] or _safe_float(info.get('regularMarketPreviousClose'))
+            quote['percentChange'] = _safe_float(info.get('regularMarketChangePercent'))
+            quote['marketTime'] = _safe_float(info.get('regularMarketTime'))
+    except Exception:
+        pass
+
+    if quote['last'] is not None and quote['previousClose'] is not None:
+        quote['variation'] = round(quote['last'] - quote['previousClose'], 2)
+        if quote['percentChange'] is None and quote['previousClose'] != 0:
+            quote['percentChange'] = round((quote['variation'] / quote['previousClose']) * 100, 2)
+
+    return quote
 
 
 def fetch_index_quote_data():
@@ -347,15 +886,7 @@ def fetch_index_quote_data():
         quote = {}
         if index_id == 'sensex':
             try:
-                import yfinance as yf
-                ticker = yf.Ticker(api_name)
-                info = ticker.info
-                quote = {
-                    'last': info.get('regularMarketPrice'),
-                    'previousClose': info.get('regularMarketPreviousClose'),
-                    'percentChange': info.get('regularMarketChangePercent'),
-                    'variation': None
-                }
+                quote = _fetch_sensex_quote()
             except Exception:
                 quote = {}
         else:
@@ -374,6 +905,13 @@ def fetch_index_quote_data():
         if percent is None and last is not None and previous is not None and previous != 0:
             percent = round((last - previous) / previous * 100, 2)
 
+        quote_time = _format_ist_time_from_epoch(
+            quote.get('marketTime')
+            or quote.get('regularMarketTime')
+            or quote.get('timeVal')
+            or quote.get('timestamp')
+        )
+
         direction = 'positive' if last is not None and previous is not None and last >= previous else 'negative'
         index_data[index_id] = {
             'last': f"{last:,.2f}" if last is not None else 'N/A',
@@ -381,7 +919,8 @@ def fetch_index_quote_data():
             'percent': f"{percent:.2f}" if percent is not None else 'N/A',
             'direction': direction,
             'raw_change': variation,
-            'raw_percent': percent
+            'raw_percent': percent,
+            'api_time': quote_time
         }
 
     return index_data
@@ -394,7 +933,7 @@ def home():
     market_indices = []
 
     try:
-        live_index_data = fetch_index_quote_data()
+        live_index_data = get_index_payload_snapshot().get('indices', {})
         index_names = {
             'nifty50': 'NIFTY 50',
             'banknifty': 'BANK NIFTY',
@@ -409,17 +948,18 @@ def home():
                 'value': index_info.get('last', 'N/A'),
                 'change': index_info.get('change', 'N/A'),
                 'percent': index_info.get('percent', 'N/A'),
-                'direction': index_info.get('direction', 'negative')
+                'direction': index_info.get('direction', 'negative'),
+                'updated_at': index_info.get('updated_at', '--')
             }
             for index_id, index_info in live_index_data.items()
         ]
     except Exception:
         market_indices = [
-            {'id': 'nifty50', 'name': 'NIFTY 50', 'value': '23,547.75', 'change': '-359.40', 'percent': '-1.50', 'direction': 'down'},
-            {'id': 'banknifty', 'name': 'BANK NIFTY', 'value': '54,239.20', 'change': '-614.65', 'percent': '-1.12', 'direction': 'down'},
-            {'id': 'finnifty', 'name': 'FIN NIFTY', 'value': '25,354.00', 'change': '-398.20', 'percent': '-1.55', 'direction': 'down'},
-            {'id': 'sensex', 'name': 'SENSEX', 'value': '74,775.74', 'change': '-1,092.06', 'percent': '-1.44', 'direction': 'down'},
-            {'id': 'midcpnifty', 'name': 'MIDCP NIFTY', 'value': '14,474.90', 'change': '-231.05', 'percent': '-1.57', 'direction': 'down'},
+            {'id': 'nifty50', 'name': 'NIFTY 50', 'value': '23,547.75', 'change': '-359.40', 'percent': '-1.50', 'direction': 'down', 'updated_at': '--'},
+            {'id': 'banknifty', 'name': 'BANK NIFTY', 'value': '54,239.20', 'change': '-614.65', 'percent': '-1.12', 'direction': 'down', 'updated_at': '--'},
+            {'id': 'finnifty', 'name': 'FIN NIFTY', 'value': '25,354.00', 'change': '-398.20', 'percent': '-1.55', 'direction': 'down', 'updated_at': '--'},
+            {'id': 'sensex', 'name': 'SENSEX', 'value': '74,775.74', 'change': '-1,092.06', 'percent': '-1.44', 'direction': 'down', 'updated_at': '--'},
+            {'id': 'midcpnifty', 'name': 'MIDCP NIFTY', 'value': '14,474.90', 'change': '-231.05', 'percent': '-1.57', 'direction': 'down', 'updated_at': '--'},
         ]
 
     return render_template("home.html", theme=theme, trending_stocks=trending_stocks, market_indices=market_indices)
@@ -439,7 +979,7 @@ def dashboard():
     # Add to recent searches
     add_recent_search(symbol)
 
-    stock_data_list = [get_stock_data(symbol, period='1y')]
+    stock_data_list = [get_stock_payload_snapshot(symbol, period='1y')]
     peer_stocks = get_trending_stocks()
 
     # AI Prediction
@@ -480,10 +1020,23 @@ def dashboard():
 @app.route("/index_data")
 def index_data():
     try:
-        index_data = fetch_index_quote_data()
+        payload = get_index_payload_snapshot()
     except Exception as e:
         return jsonify(error="Unable to fetch index data", details=str(e)), 500
-    return jsonify(index_data)
+    response = jsonify(payload)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
+@app.route("/market_status")
+def market_status():
+    response = jsonify(market_open=is_indian_market_open())
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @app.route("/chart_data")
@@ -492,7 +1045,7 @@ def chart_data():
     period = request.args.get("period", "1y")
     if not symbol:
         symbol = "RELIANCE"
-    stock = get_stock_data(symbol, period=period)
+    stock = get_stock_payload_snapshot(symbol, period=period)
     return jsonify(hist_json=stock["hist_json"])
 
 @app.route("/stock_data")
@@ -503,7 +1056,7 @@ def stock_data():
         symbol = "RELIANCE"
 
     try:
-        stock = get_stock_data(symbol, period=period)
+        stock = get_stock_payload_snapshot(symbol, period=period)
     except Exception as e:
         return jsonify(
             symbol=symbol.upper(),
@@ -524,22 +1077,12 @@ def stock_data():
                 'exchange': 'NSE',
                 'market_state': ''
             },
+            server_time=_current_ist_time_str(),
             error="Unable to fetch stock data",
             details=str(e)
         ), 200
 
-    return jsonify(
-        symbol=stock["symbol"],
-        hist_json=stock["hist_json"],
-        current_price=stock["current_price"],
-        previous_close=stock["previous_close"],
-        price_change=stock["price_change"],
-        price_change_percent=stock["price_change_percent"],
-        market_time=stock["market_time"],
-        price_summary=stock["price_summary"],
-        company_essentials=stock["company_essentials"],
-        stock_profile=stock["stock_profile"]
-    )
+    return jsonify(stock)
 
 @app.before_request
 def log_request_info():
