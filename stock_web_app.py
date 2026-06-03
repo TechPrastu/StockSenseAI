@@ -228,12 +228,19 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             '52 Week Low': nse_data.get('low52'),
             'Volume': nse_data.get('quantityTraded')
         }
-    except Exception as e:
+        nse_current_price = _safe_float(nse_data.get('lastPrice') or nse_data.get('ltp'))
+        nse_previous_close = _safe_float(nse_data.get('previousClose') or nse_data.get('prevClose'))
+        if current_price is None and nse_current_price is not None:
+            current_price = nse_current_price
+        if previous_close is None and nse_previous_close is not None:
+            previous_close = nse_previous_close
+    except Exception:
         nse_info = {}
 
+    # If market time is numeric, convert to India time string.
     market_time = yq_price.get('regularMarketTime') or ''
     if isinstance(market_time, (int, float)) and market_time > 0:
-        from datetime import timezone, timedelta
+        from datetime import datetime, timezone, timedelta
         india_tz = timezone(timedelta(hours=5, minutes=30))
         try:
             market_time = datetime.fromtimestamp(market_time, tz=timezone.utc).astimezone(india_tz).strftime('%Y-%m-%d %H:%M %Z')
@@ -316,17 +323,105 @@ def get_trending_stocks():
 
     return trending
 
+
+def _safe_float(value):
+    try:
+        if isinstance(value, str):
+            return float(value.replace(',', ''))
+        return float(value)
+    except Exception:
+        return None
+
+
+def fetch_index_quote_data():
+    index_map = {
+        'nifty50': 'NIFTY 50',
+        'banknifty': 'NIFTY BANK',
+        'finnifty': 'NIFTY FIN SERVICE',
+        'sensex': '^BSESN',
+        'midcpnifty': 'NIFTY MID SELECT'
+    }
+    index_data = {}
+
+    for index_id, api_name in index_map.items():
+        quote = {}
+        if index_id == 'sensex':
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(api_name)
+                info = ticker.info
+                quote = {
+                    'last': info.get('regularMarketPrice'),
+                    'previousClose': info.get('regularMarketPreviousClose'),
+                    'percentChange': info.get('regularMarketChangePercent'),
+                    'variation': None
+                }
+            except Exception:
+                quote = {}
+        else:
+            try:
+                quote = get_nse().get_index_quote(api_name) or {}
+            except Exception:
+                quote = {}
+
+        last = _safe_float(quote.get('last') or quote.get('current_price') or quote.get('previousClose'))
+        previous = _safe_float(quote.get('previousClose') or quote.get('prevclose') or quote.get('prev_close') or quote.get('previousDayVal'))
+        percent = _safe_float(quote.get('percentChange') or quote.get('percent_change') or quote.get('percentchange') or quote.get('variation'))
+        variation = _safe_float(quote.get('variation') or quote.get('change') or quote.get('net_change'))
+
+        if last is not None and previous is not None and variation is None:
+            variation = round(last - previous, 2)
+        if percent is None and last is not None and previous is not None and previous != 0:
+            percent = round((last - previous) / previous * 100, 2)
+
+        direction = 'positive' if last is not None and previous is not None and last >= previous else 'negative'
+        index_data[index_id] = {
+            'last': f"{last:,.2f}" if last is not None else 'N/A',
+            'change': f"{variation:+,.2f}" if variation is not None else 'N/A',
+            'percent': f"{percent:.2f}" if percent is not None else 'N/A',
+            'direction': direction,
+            'raw_change': variation,
+            'raw_percent': percent
+        }
+
+    return index_data
+
+
 @app.route("/")
 def home():
     theme = request.args.get("theme", "light")
     trending_stocks = get_trending_stocks()
-    market_indices = [
-        {'name': 'NIFTY 50', 'value': '23,547.75', 'change': '-359.40', 'percent': '-1.50', 'direction': 'down'},
-        {'name': 'BANK NIFTY', 'value': '54,239.20', 'change': '-614.65', 'percent': '-1.12', 'direction': 'down'},
-        {'name': 'FIN NIFTY', 'value': '25,354.00', 'change': '-398.20', 'percent': '-1.55', 'direction': 'down'},
-        {'name': 'SENSEX', 'value': '74,775.74', 'change': '-1,092.06', 'percent': '-1.44', 'direction': 'down'},
-        {'name': 'MIDCP NIFTY', 'value': '14,474.90', 'change': '-231.05', 'percent': '-1.57', 'direction': 'down'},
-    ]
+    market_indices = []
+
+    try:
+        live_index_data = fetch_index_quote_data()
+        index_names = {
+            'nifty50': 'NIFTY 50',
+            'banknifty': 'BANK NIFTY',
+            'finnifty': 'FIN NIFTY',
+            'sensex': 'SENSEX',
+            'midcpnifty': 'MIDCP NIFTY'
+        }
+        market_indices = [
+            {
+                'id': index_id,
+                'name': index_names.get(index_id, index_id.upper()),
+                'value': index_info.get('last', 'N/A'),
+                'change': index_info.get('change', 'N/A'),
+                'percent': index_info.get('percent', 'N/A'),
+                'direction': index_info.get('direction', 'negative')
+            }
+            for index_id, index_info in live_index_data.items()
+        ]
+    except Exception:
+        market_indices = [
+            {'id': 'nifty50', 'name': 'NIFTY 50', 'value': '23,547.75', 'change': '-359.40', 'percent': '-1.50', 'direction': 'down'},
+            {'id': 'banknifty', 'name': 'BANK NIFTY', 'value': '54,239.20', 'change': '-614.65', 'percent': '-1.12', 'direction': 'down'},
+            {'id': 'finnifty', 'name': 'FIN NIFTY', 'value': '25,354.00', 'change': '-398.20', 'percent': '-1.55', 'direction': 'down'},
+            {'id': 'sensex', 'name': 'SENSEX', 'value': '74,775.74', 'change': '-1,092.06', 'percent': '-1.44', 'direction': 'down'},
+            {'id': 'midcpnifty', 'name': 'MIDCP NIFTY', 'value': '14,474.90', 'change': '-231.05', 'percent': '-1.57', 'direction': 'down'},
+        ]
+
     return render_template("home.html", theme=theme, trending_stocks=trending_stocks, market_indices=market_indices)
 
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -382,6 +477,15 @@ def dashboard():
         peer_stocks=peer_stocks
     )
 
+@app.route("/index_data")
+def index_data():
+    try:
+        index_data = fetch_index_quote_data()
+    except Exception as e:
+        return jsonify(error="Unable to fetch index data", details=str(e)), 500
+    return jsonify(index_data)
+
+
 @app.route("/chart_data")
 def chart_data():
     symbol = request.args.get("symbol", "RELIANCE").strip().split(",")[0].strip()
@@ -390,6 +494,52 @@ def chart_data():
         symbol = "RELIANCE"
     stock = get_stock_data(symbol, period=period)
     return jsonify(hist_json=stock["hist_json"])
+
+@app.route("/stock_data")
+def stock_data():
+    symbol = request.args.get("symbol", "RELIANCE").strip().split(",")[0].strip()
+    period = request.args.get("period", "1y")
+    if not symbol:
+        symbol = "RELIANCE"
+
+    try:
+        stock = get_stock_data(symbol, period=period)
+    except Exception as e:
+        return jsonify(
+            symbol=symbol.upper(),
+            hist_json=[],
+            current_price=None,
+            previous_close=None,
+            price_change=None,
+            price_change_percent=None,
+            market_time='',
+            price_summary={},
+            company_essentials={},
+            stock_profile={
+                'company_name': symbol.upper(),
+                'sector': 'N/A',
+                'industry': 'N/A',
+                'summary': '',
+                'website': '',
+                'exchange': 'NSE',
+                'market_state': ''
+            },
+            error="Unable to fetch stock data",
+            details=str(e)
+        ), 200
+
+    return jsonify(
+        symbol=stock["symbol"],
+        hist_json=stock["hist_json"],
+        current_price=stock["current_price"],
+        previous_close=stock["previous_close"],
+        price_change=stock["price_change"],
+        price_change_percent=stock["price_change_percent"],
+        market_time=stock["market_time"],
+        price_summary=stock["price_summary"],
+        company_essentials=stock["company_essentials"],
+        stock_profile=stock["stock_profile"]
+    )
 
 @app.before_request
 def log_request_info():

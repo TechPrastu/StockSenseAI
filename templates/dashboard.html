@@ -44,7 +44,7 @@
         <main class="dashboard-shell">
             {% for stock in stock_data_list %}
             <section class="dashboard-hero card">
-                <div class="dashboard-summary-top">
+                <div class="dashboard-hero-summary">
                     <div class="dashboard-summary-head">
                         <div class="dashboard-summary-title">
                             <div class="hero-tag">Stock Overview</div>
@@ -58,58 +58,17 @@
                                 <span class="ticker-chip">BSE: {{ stock.stock_profile.exchange or 'N/A' }}</span>
                             </div>
                         </div>
-                        <div class="dashboard-summary-actions">
-                            <button type="button" class="outline-btn">Export to Excel</button>
-                            <button type="button" class="primary-btn">Follow</button>
-                        </div>
                     </div>
 
-                    <div class="dashboard-top-metrics">
-                        <div class="metric-card">
-                            <span>Market Cap</span>
-                            <strong>{{ stock.company_essentials.market_cap }}</strong>
-                        </div>
-                        <div class="metric-card">
-                            <span>Current Price</span>
-                            <strong>₹ {{ stock.current_price | default('N/A') }}</strong>
-                        </div>
-                        <div class="metric-card">
-                            <span>High / Low</span>
-                            <strong>₹ {{ stock.price_summary.week_high | default('N/A') }} / ₹ {{ stock.price_summary.week_low | default('N/A') }}</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dashboard-hero-main">
-                    <div class="hero-left">
-                        <p class="hero-description">{{ stock.stock_profile.summary or 'No summary available yet. Explore fundamentals, news, and predictions for this stock.' }}</p>
-                        <div class="hero-stat-grid">
-                            <div class="metric-card">
-                                <span>Market Cap</span>
-                                <strong>{{ stock.company_essentials.market_cap | default('N/A') }}</strong>
-                            </div>
-                            <div class="metric-card">
-                                <span>P/E Ratio</span>
-                                <strong>{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong>
-                            </div>
-                            <div class="metric-card">
-                                <span>P/B Ratio</span>
-                                <strong>{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong>
-                            </div>
-                            <div class="metric-card">
-                                <span>Promoter Stake</span>
-                                <strong>{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="hero-right">
+                    <div class="dashboard-hero-quote">
                         <div class="stock-summary-card card">
                             <div class="stock-summary-header">
                                 <div>
                                     <span class="hero-tag">Live Quote</span>
                                     <div class="price-market-title">LIVE PRICE</div>
-                                    <div class="price-market-value">₹ {{ stock.current_price | default('N/A') }}</div>
-                                    <div class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                    <div class="price-market-value" id="live-price-{{ stock.symbol }}">₹ {{ stock.current_price | default('N/A') }}</div>
+                                    <div id="price-change-{{ stock.symbol }}" class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                        <span class="price-change-symbol"></span>
                                         {% if stock.price_change is not none %}
                                             {% if stock.price_change >= 0 %}+{% endif %}{{ stock.price_change | round(2) }}
                                             ({{ stock.price_change_percent | round(2) }}%)
@@ -120,21 +79,24 @@
                                 </div>
                                 <div class="stock-badge">
                                     <span>Market State</span>
-                                    <strong>{{ stock.stock_profile.market_state or 'N/A' }}</strong>
+                                    <strong id="market-state-{{ stock.symbol }}">{{ stock.stock_profile.market_state or 'N/A' }}</strong>
                                 </div>
+                            </div>
+                            <div class="stock-summary-meta">
+                                <span>BSE: Today, {{ stock.market_time or 'N/A' }}</span>
                             </div>
                             <div class="stock-summary-grid">
                                 <div class="summary-item">
                                     <span>Last Update</span>
-                                    <strong>{{ stock.market_time or 'N/A' }}</strong>
+                                    <strong id="market-time-{{ stock.symbol }}">{{ stock.market_time or 'N/A' }}</strong>
                                 </div>
                                 <div class="summary-item">
                                     <span>52W High</span>
-                                    <strong>{{ stock.price_summary.week_high | default('N/A') }}</strong>
+                                    <strong id="week-high-{{ stock.symbol }}">{{ stock.price_summary.week_high | default('N/A') }}</strong>
                                 </div>
                                 <div class="summary-item">
                                     <span>52W Low</span>
-                                    <strong>{{ stock.price_summary.week_low | default('N/A') }}</strong>
+                                    <strong id="week-low-{{ stock.symbol }}">{{ stock.price_summary.week_low | default('N/A') }}</strong>
                                 </div>
                             </div>
                             <div class="stock-summary-footer">
@@ -146,6 +108,10 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="dashboard-hero-description">
+                        <p class="hero-description">{{ stock.stock_profile.summary or 'No summary available yet. Explore fundamentals, news, and predictions for this stock.' }}</p>
+                    </div>
                 </div>
             </section>
 
@@ -154,24 +120,26 @@
                     <div class="card overview-card">
                         <div class="section-title">Price Summary</div>
                         <div class="overview-grid">
-                            <div><span>Today's High</span><strong>{{ stock.price_summary.today_high | default('N/A') }}</strong></div>
-                            <div><span>Today's Low</span><strong>{{ stock.price_summary.today_low | default('N/A') }}</strong></div>
-                            <div><span>52W High</span><strong>{{ stock.price_summary.week_high | default('N/A') }}</strong></div>
-                            <div><span>52W Low</span><strong>{{ stock.price_summary.week_low | default('N/A') }}</strong></div>
+                            <div><span>Today's High</span><strong id="today-high-{{ stock.symbol }}">{{ stock.price_summary.today_high | default('N/A') }}</strong></div>
+                            <div><span>Today's Low</span><strong id="today-low-{{ stock.symbol }}">{{ stock.price_summary.today_low | default('N/A') }}</strong></div>
+                            <div><span>52W High</span><strong id="week-high-{{ stock.symbol }}">{{ stock.price_summary.week_high | default('N/A') }}</strong></div>
+                            <div><span>52W Low</span><strong id="week-low-{{ stock.symbol }}">{{ stock.price_summary.week_low | default('N/A') }}</strong></div>
                         </div>
                     </div>
 
                     <div class="card overview-card">
                         <div class="section-title">Company Essentials</div>
                         <div class="overview-grid two-col">
-                            <div><span>Enterprise Value</span><strong>{{ stock.company_essentials.enterprise_value | default('N/A') }}</strong></div>
-                            <div><span>No. of Shares</span><strong>{{ stock.company_essentials.no_of_shares }}</strong></div>
-                            <div><span>P/E Ratio</span><strong>{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong></div>
-                            <div><span>P/B Ratio</span><strong>{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong></div>
-                            <div><span>Book Value</span><strong>{{ stock.company_essentials.book_value }}</strong></div>
-                            <div><span>Total Cash</span><strong>{{ stock.company_essentials.cash }}</strong></div>
-                            <div><span>Total Debt</span><strong>{{ stock.company_essentials.debt }}</strong></div>
-                            <div><span>EPS</span><strong>{{ stock.company_essentials.eps | default('N/A') }}</strong></div>
+                            <div><span>Market Cap</span><strong id="market-cap-{{ stock.symbol }}">{{ stock.company_essentials.market_cap }}</strong></div>
+                            <div><span>Enterprise Value</span><strong id="enterprise-value-{{ stock.symbol }}">{{ stock.company_essentials.enterprise_value | default('N/A') }}</strong></div>
+                            <div><span>No. of Shares</span><strong id="no-shares-{{ stock.symbol }}">{{ stock.company_essentials.no_of_shares }}</strong></div>
+                            <div><span>P/E Ratio</span><strong id="company-pe-ratio-{{ stock.symbol }}">{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong></div>
+                            <div><span>P/B Ratio</span><strong id="company-pb-ratio-{{ stock.symbol }}">{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong></div>
+                            <div><span>Book Value</span><strong id="book-value-{{ stock.symbol }}">{{ stock.company_essentials.book_value }}</strong></div>
+                            <div><span>Total Cash</span><strong id="total-cash-{{ stock.symbol }}">{{ stock.company_essentials.cash }}</strong></div>
+                            <div><span>Promoter Stake</span><strong id="promoter-stake-{{ stock.symbol }}">{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong></div>
+                            <div><span>Total Debt</span><strong id="total-debt-{{ stock.symbol }}">{{ stock.company_essentials.debt }}</strong></div>
+                            <div><span>EPS</span><strong id="eps-{{ stock.symbol }}">{{ stock.company_essentials.eps | default('N/A') }}</strong></div>
                         </div>
                     </div>
 
@@ -262,8 +230,8 @@
             <section class="peer-section card">
                 <div class="section-heading">
                     <div>
-                        <h3>Peer Comparison</h3>
-                        <p>Compare this stock against other frequently viewed NSE names.</p>
+                        <h3>Top Searched Stocks</h3>
+                        <p>Popular NSE stocks that users are searching for the most right now.</p>
                     </div>
                 </div>
                 <div class="table-scroll">
@@ -464,6 +432,81 @@
             pill.className = `chart-return-pill ${status}`;
         }
 
+        function updateStockSummary(symbol, data) {
+            const setText = (id, value) => {
+                const element = document.getElementById(`${id}-${symbol}`);
+                if (!element) return;
+                element.textContent = value ?? 'N/A';
+            };
+
+            setText('market-cap', data.company_essentials.market_cap);
+            setText('current-price', data.current_price !== null && data.current_price !== undefined ? `₹ ${Number(data.current_price).toFixed(2)}` : 'N/A');
+            setText('high-low', data.price_summary.week_high !== null && data.price_summary.week_low !== null ? `₹ ${data.price_summary.week_high} / ₹ ${data.price_summary.week_low}` : 'N/A');
+            setText('pe-ratio', data.company_essentials.pe_ratio);
+            setText('pb-ratio', data.company_essentials.pb_ratio);
+            setText('promoter-stake', data.company_essentials.promoter_holding);
+            setText('market-state', data.stock_profile.market_state);
+            setText('market-time', data.market_time);
+            setText('week-high', data.price_summary.week_high);
+            setText('week-low', data.price_summary.week_low);
+            setText('today-high', data.price_summary.today_high);
+            setText('today-low', data.price_summary.today_low);
+            setText('enterprise-value', data.company_essentials.enterprise_value);
+            setText('no-shares', data.company_essentials.no_of_shares);
+            setText('company-pe-ratio', data.company_essentials.pe_ratio);
+            setText('company-pb-ratio', data.company_essentials.pb_ratio);
+            setText('book-value', data.company_essentials.book_value);
+            setText('total-cash', data.company_essentials.cash);
+            setText('total-debt', data.company_essentials.debt);
+            setText('eps', data.company_essentials.eps);
+
+            const changeElement = document.getElementById(`price-change-${symbol}`);
+            if (changeElement) {
+                const change = data.price_change;
+                const changePct = data.price_change_percent;
+                if (change !== null && change !== undefined) {
+                    const formattedChange = `${change >= 0 ? '+' : ''}${Number(change).toFixed(2)} (${changePct !== null && changePct !== undefined ? Number(changePct * 100).toFixed(2) : '0.00'}%)`;
+                    changeElement.textContent = formattedChange;
+                    changeElement.classList.toggle('positive', change >= 0);
+                    changeElement.classList.toggle('negative', change < 0);
+                } else {
+                    changeElement.textContent = 'N/A';
+                    changeElement.classList.remove('positive', 'negative');
+                }
+            }
+
+            const priceElement = document.getElementById(`live-price-${symbol}`);
+            if (priceElement) {
+                priceElement.textContent = data.current_price !== null && data.current_price !== undefined ? `₹ ${Number(data.current_price).toFixed(2)}` : 'N/A';
+            }
+        }
+
+        function refreshStockData(symbol, period = '1y') {
+            fetch(`/stock_data?symbol=${symbol}&period=${period}`)
+                .then(response => response.ok ? response.json() : Promise.reject(response))
+                .then(data => {
+                    if (data.error) return;
+
+                    chartState[symbol] = chartState[symbol] || { period, chartType: 'price', histData: [] };
+                    chartState[symbol].period = period;
+                    chartState[symbol].histData = data.hist_json || chartState[symbol].histData;
+
+                    if (chartState[symbol].chartType) {
+                        renderChart(symbol, chartState[symbol].histData, chartState[symbol].chartType);
+                    }
+                    updateReturn(symbol, chartState[symbol].histData, period);
+                    updateStockSummary(symbol, data);
+                })
+                .catch(console.error);
+        }
+
+        function startLiveRefresh(symbol, period = '1y') {
+            refreshStockData(symbol, period);
+            setInterval(() => {
+                refreshStockData(symbol, chartState[symbol]?.period || period);
+            }, 60000);
+        }
+
         function setChartTab(symbol, type, button) {
             const tabs = document.querySelectorAll(`#chart-tabs-${symbol} .chart-tab`);
             tabs.forEach(tab => tab.classList.toggle('active', tab === button));
@@ -493,6 +536,7 @@
         chartState['{{ stock.symbol }}'] = { period: '1y', chartType: 'price', histData: initialData_{{ stock.symbol }} };
         renderChart('{{ stock.symbol }}', initialData_{{ stock.symbol }}, 'price');
         updateReturn('{{ stock.symbol }}', initialData_{{ stock.symbol }}, '1y');
+        startLiveRefresh('{{ stock.symbol }}', '1y');
         {% endfor %}
 
         function toggleTheme() {

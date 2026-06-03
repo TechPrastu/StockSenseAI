@@ -22,7 +22,7 @@
                 </div>
             </div>
             <div class="home-header-actions">
-                <button type="button" class="theme-toggle">🌙</button>
+                <button type="button" class="theme-toggle" onclick="toggleTheme()">🌙</button>
                 <button class="outline-btn small-btn">Login</button>
                 <button class="primary-btn small-btn">Open Account</button>
             </div>
@@ -32,12 +32,16 @@
             <section class="index-grid-section">
                 <div class="index-grid card">
                     {% for index in market_indices %}
-                    <div class="index-card {% if index.direction == 'down' %}negative{% else %}positive{% endif %}">
+                    <div class="index-card {% if index.direction == 'down' %}negative{% else %}positive{% endif %}" data-index-id="{{ index.id }}">
                         <span class="index-name">{{ index.name }}</span>
-                        <strong class="index-value">{{ index.value }}</strong>
-                        <span class="index-change">{{ index.change }} ({{ index.percent }}%)</span>
+                        <strong id="index-price-{{ index.id }}" class="index-value">{{ index.value }}</strong>
+                        <span class="index-change" id="index-change-{{ index.id }}">
+                            <span class="index-arrow">{% if index.direction == 'down' %}▼{% else %}▲{% endif %}</span>
+                            {{ index.change }} ({{ index.percent }}%)
+                        </span>
                     </div>
                     {% endfor %}
+                    <div class="index-loading-overlay hidden" id="index-loading-overlay">Updating live indexes…</div>
                 </div>
             </section>
 
@@ -63,6 +67,23 @@
                             <button type="submit" class="search-submit">Explore</button>
                         </div>
                     </form>
+                    <div id="search-preview" class="search-preview card hidden">
+                        <div class="preview-heading">
+                            <div>
+                                <span class="preview-label">Preview</span>
+                                <strong id="preview-symbol">N/A</strong>
+                            </div>
+                            <span id="preview-company" class="preview-company">Start typing a symbol to see a live preview.</span>
+                        </div>
+                        <div class="preview-row">
+                            <span>Latest price</span>
+                            <strong id="preview-price">₹0.00</strong>
+                        </div>
+                        <div class="preview-row preview-meta">
+                            <span id="preview-change" class="stock-change">N/A</span>
+                            <span id="preview-market-time" class="preview-time"></span>
+                        </div>
+                    </div>
                 </div>
                 <div class="hero-aside">
                     <div class="stat-card">
@@ -92,8 +113,9 @@
                         </div>
                         <div class="stock-name">{{ stock.name }}</div>
                         <div class="stock-price-info">
-                            <span class="stock-price">₹{{ stock.price }}</span>
-                            <span class="stock-change {% if stock.change|float >= 0 %}positive{% else %}negative{% endif %}">
+                            <span class="stock-price" id="stock-price-{{ stock.symbol }}">₹{{ stock.price }}</span>
+                            <span class="stock-change {% if stock.change|float >= 0 %}positive{% else %}negative{% endif %}" id="stock-change-{{ stock.symbol }}">
+                                <span class="stock-arrow">{% if stock.change|float >= 0 %}▲{% else %}▼{% endif %}</span>
                                 {% if stock.change|float >= 0 %}+{% endif %}{{ stock.change }}%
                             </span>
                         </div>
@@ -111,6 +133,74 @@
 
     <script>
         const stockList = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV', 'HINDUNILVR', 'LT', 'ASIANPAINT', 'AXISBANK', 'HCLTECH', 'ONGC', 'CDSL', 'WIPRO', 'MARUTI', 'BHARTIARTL', 'SBIN', 'ICICIBANK', 'KOTAKBANK', 'BAJAJFINSV', 'SUNPHARMA', 'TECHM', 'POWERGRID', 'JSWSTEEL', 'ADANIGREEN', 'TATASTEEL', 'GRASIM', 'BPCL', 'IOCL', 'APOLLOHOSP', 'DRREDDY'];
+        const homeMarketIndices = {{ market_indices | tojson }};
+        const homeTrendingSymbols = {{ trending_stocks | map(attribute='symbol') | list | tojson }};
+
+        function debounce(fn, delay = 500) {
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn(...args), delay);
+            };
+        }
+
+        function updateSearchPreview(data) {
+            const previewCard = document.getElementById('search-preview');
+            const previewSymbol = document.getElementById('preview-symbol');
+            const previewCompany = document.getElementById('preview-company');
+            const previewPrice = document.getElementById('preview-price');
+            const previewChange = document.getElementById('preview-change');
+            const previewMarketTime = document.getElementById('preview-market-time');
+            if (!previewCard || !previewSymbol || !previewCompany || !previewPrice || !previewChange || !previewMarketTime) return;
+
+            previewSymbol.textContent = data.symbol || 'N/A';
+            previewCompany.textContent = data.stock_profile?.company_name || data.symbol || 'N/A';
+            previewPrice.textContent = data.current_price != null ? `₹ ${Number(data.current_price).toFixed(2)}` : 'N/A';
+            const change = data.price_change;
+            const percent = data.price_change_percent;
+            const hasChange = change !== null && change !== undefined;
+            const formattedChange = hasChange ? `${change >= 0 ? '▲' : '▼'} ${change >= 0 ? '+' : ''}${Number(change).toFixed(2)} (${percent != null ? `${Number(percent * 100).toFixed(2)}%` : 'N/A'})` : 'N/A';
+            previewChange.textContent = formattedChange;
+            previewChange.classList.toggle('positive', hasChange && change >= 0);
+            previewChange.classList.toggle('negative', hasChange && change < 0);
+            previewMarketTime.textContent = data.market_time || '';
+            previewCard.classList.remove('hidden');
+        }
+
+        function hideSearchPreview() {
+            const previewCard = document.getElementById('search-preview');
+            if (previewCard) {
+                previewCard.classList.add('hidden');
+            }
+        }
+
+        function refreshSearchPreview(symbol) {
+            if (!symbol) {
+                hideSearchPreview();
+                return;
+            }
+
+            fetch(`/stock_data?symbol=${encodeURIComponent(symbol)}&period=1d`)
+                .then(response => response.ok ? response.json() : Promise.reject(response))
+                .then(data => {
+                    if (data.error) {
+                        hideSearchPreview();
+                        return;
+                    }
+                    updateSearchPreview(data);
+                })
+                .catch(() => {
+                    hideSearchPreview();
+                });
+        }
+
+        const debouncedRefreshSearchPreview = debounce((query) => {
+            if (stockList.includes(query)) {
+                refreshSearchPreview(query);
+            } else {
+                hideSearchPreview();
+            }
+        });
 
         function setupAutocomplete(inputId, suggestionsId) {
             const inputField = document.getElementById(inputId);
@@ -124,6 +214,7 @@
 
                 if (query.length === 0) {
                     suggestionsList.style.display = 'none';
+                    hideSearchPreview();
                     return;
                 }
 
@@ -139,11 +230,18 @@
                             inputField.value = stock;
                             suggestionsList.innerHTML = '';
                             suggestionsList.style.display = 'none';
+                            refreshSearchPreview(stock);
                         };
                         suggestionsList.appendChild(li);
                     });
                 } else {
                     suggestionsList.style.display = 'none';
+                }
+
+                if (stockList.includes(query)) {
+                    debouncedRefreshSearchPreview(query);
+                } else {
+                    hideSearchPreview();
                 }
             });
 
@@ -172,6 +270,89 @@
         document.querySelectorAll('.theme-toggle').forEach(btn => {
             btn.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
         });
+
+        function setIndexLoading(loading) {
+            const indexGrid = document.querySelector('.index-grid');
+            const overlay = document.getElementById('index-loading-overlay');
+            if (!indexGrid || !overlay) return;
+            indexGrid.classList.toggle('loading', loading);
+            overlay.classList.toggle('hidden', !loading);
+        }
+
+        function updateIndexCard(indexId, data) {
+            const priceEl = document.getElementById(`index-price-${indexId}`);
+            const changeEl = document.getElementById(`index-change-${indexId}`);
+            const cardEl = document.querySelector(`.index-card[data-index-id="${indexId}"]`);
+            if (!priceEl || !changeEl || !cardEl) return;
+
+            const isPositive = data.raw_change >= 0;
+
+            priceEl.textContent = data.last || 'N/A';
+            changeEl.innerHTML = `<span class="index-arrow">${isPositive ? '▲' : '▼'}</span> ${data.change} (${data.percent}%)`;
+            changeEl.classList.toggle('positive', isPositive);
+            changeEl.classList.toggle('negative', !isPositive);
+            cardEl.classList.toggle('positive', isPositive);
+            cardEl.classList.toggle('negative', !isPositive);
+        }
+
+        function refreshHomeIndexData() {
+            setIndexLoading(true);
+            fetch('/index_data')
+                .then(response => response.ok ? response.json() : Promise.reject(response))
+                .then(data => {
+                    Object.entries(data).forEach(([indexId, indexData]) => {
+                        updateIndexCard(indexId, indexData);
+                    });
+                })
+                .catch(console.error)
+                .finally(() => {
+                    setIndexLoading(false);
+                });
+        }
+
+        function updateTrendingCard(symbol, data) {
+            const priceEl = document.getElementById(`stock-price-${symbol}`);
+            const changeEl = document.getElementById(`stock-change-${symbol}`);
+            if (!priceEl || !changeEl) return;
+
+            const change = data.price_change;
+            const hasChange = change !== null && change !== undefined;
+            const direction = hasChange ? (change >= 0 ? 'positive' : 'negative') : 'neutral';
+            const formattedPrice = data.current_price !== null && data.current_price !== undefined ? `₹ ${Number(data.current_price).toFixed(2)}` : 'N/A';
+            const formattedChange = hasChange ? `${change >= 0 ? '+' : ''}${Number(change).toFixed(2)}%` : 'N/A';
+
+            priceEl.textContent = formattedPrice;
+            changeEl.innerHTML = `<span class="stock-arrow">${hasChange ? (change >= 0 ? '▲' : '▼') : ''}</span> ${formattedChange}`;
+            changeEl.classList.toggle('positive', direction === 'positive');
+            changeEl.classList.toggle('negative', direction === 'negative');
+        }
+
+        function refreshTrendingStocks() {
+            homeTrendingSymbols.forEach((symbol) => {
+                fetch(`/stock_data?symbol=${symbol}&period=1d`)
+                    .then(response => response.ok ? response.json() : Promise.reject(response))
+                    .then(data => {
+                        if (data.error) {
+                            console.warn(`Skipping trending update for ${symbol}:`, data.details || data.error);
+                            return;
+                        }
+                        updateTrendingCard(symbol, data);
+                    })
+                    .catch(console.error);
+            });
+        }
+
+        function startHomeLiveUpdates() {
+            refreshHomeIndexData();
+            refreshTrendingStocks();
+            setInterval(refreshHomeIndexData, 30000);
+            setInterval(refreshTrendingStocks, 30000);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            startHomeLiveUpdates();
+        });
+
         document.title = 'StockSense AI | NSE Stock Intelligence';
     </script>
 </body>
