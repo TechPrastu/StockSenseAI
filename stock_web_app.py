@@ -212,12 +212,24 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
     yq_financial = {}
     yq_price = {}
     yq_quote = {}
+
+    def _safe_yq_section(section):
+        if isinstance(section, dict):
+            return section
+        return {}
+
     try:
-        yq_profile = yq_ticker.summary_profile.get(yf_symbol, {}) or {}
-        yq_detail = yq_ticker.summary_detail.get(yf_symbol, {}) or {}
-        yq_financial = yq_ticker.financial_data.get(yf_symbol, {}) or {}
-        yq_price = yq_ticker.price.get(yf_symbol, {}) or {}
-        yq_quote = yq_ticker.quote_type.get(yf_symbol, {}) or {}
+        raw_profile = _safe_yq_section(yq_ticker.summary_profile)
+        raw_detail = _safe_yq_section(yq_ticker.summary_detail)
+        raw_financial = _safe_yq_section(yq_ticker.financial_data)
+        raw_price = _safe_yq_section(yq_ticker.price)
+        raw_quote = _safe_yq_section(yq_ticker.quote_type)
+
+        yq_profile = _safe_yq_section(raw_profile.get(yf_symbol, {}))
+        yq_detail = _safe_yq_section(raw_detail.get(yf_symbol, {}))
+        yq_financial = _safe_yq_section(raw_financial.get(yf_symbol, {}))
+        yq_price = _safe_yq_section(raw_price.get(yf_symbol, {}))
+        yq_quote = _safe_yq_section(raw_quote.get(yf_symbol, {}))
     except Exception:
         pass
 
@@ -259,98 +271,14 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             change = None
             change_percent = None
 
-    sentiment = 'neutral'
-    if change is not None:
-        sentiment = 'positive' if change > 0 else 'negative' if change < 0 else 'neutral'
-
-    nse_quote = {}
+    promoter_holding_value = None
     try:
-        nse_quote = get_nse().get_quote(symbol.lower())
-        if not isinstance(nse_quote, dict):
-            nse_quote = {}
+        if hasattr(get_nse(), 'get_quote'):
+            quote_data = get_nse().get_quote(symbol.lower())
+            if isinstance(quote_data, dict):
+                promoter_holding_value = quote_data.get('promoterHolding')
     except Exception:
-        nse_quote = {}
-
-    pe_ratio_value = safe_numeric(yq_financial.get('trailingPE') or yq_detail.get('trailingPE') or info.get('trailingPE'))
-    pb_ratio_value = safe_numeric(yq_financial.get('priceToBook') or info.get('priceToBook'))
-    price_to_fcf_value = safe_numeric(yq_detail.get('priceToFreeCashFlow') or info.get('priceToFreeCashFlow'))
-    peg_ratio_value = safe_numeric(yq_financial.get('pegRatio') or info.get('pegRatio'))
-    roic_value = safe_numeric(
-        yq_financial.get('returnOnCapital')
-        or yq_financial.get('returnOnCapitalEmployment')
-        or info.get('returnOnCapital')
-        or yq_financial.get('returnOnAssets')
-    )
-    gross_margin_value = safe_numeric(
-        yq_financial.get('grossMargins')
-        or yq_financial.get('grossProfitMargins')
-        or info.get('grossMargins')
-    )
-
-    nse_quote = {}
-    try:
-        nse_quote = get_nse().get_quote(symbol.lower())
-        if not isinstance(nse_quote, dict):
-            nse_quote = {}
-    except Exception:
-        nse_quote = {}
-
-    def format_check_value(value, is_percent=False):
-        if value is None:
-            return 'N/A'
-        return f"{value * 100:.2f}%" if is_percent else f"{value:.2f}"
-
-    def check_status(value, threshold, direction='lt'):
-        if value is None:
-            return 'unknown'
-        if direction == 'lt':
-            return 'pass' if value < threshold else 'fail'
-        return 'pass' if value > threshold else 'fail'
-
-    value_checklist = [
-        {
-            'label': 'P/E Ratio < 20',
-            'value_display': format_check_value(pe_ratio_value),
-            'threshold_display': '< 20',
-            'status': check_status(pe_ratio_value, 20, 'lt'),
-            'tooltip': 'A lower P/E ratio may indicate a more attractively valued stock relative to earnings.'
-        },
-        {
-            'label': 'Price / FCF < 20',
-            'value_display': format_check_value(price_to_fcf_value),
-            'threshold_display': '< 20',
-            'status': check_status(price_to_fcf_value, 20, 'lt'),
-            'tooltip': 'Price-to-free-cash-flow helps gauge valuation against cash generation; lower is typically better.'
-        },
-        {
-            'label': 'P/B Ratio < 2',
-            'value_display': format_check_value(pb_ratio_value),
-            'threshold_display': '< 2',
-            'status': check_status(pb_ratio_value, 2, 'lt'),
-            'tooltip': 'Price-to-book measures market value versus accounting value; lower values often fit value investing screens.'
-        },
-        {
-            'label': 'PEG Ratio < 2',
-            'value_display': format_check_value(peg_ratio_value),
-            'threshold_display': '< 2',
-            'status': check_status(peg_ratio_value, 2, 'lt'),
-            'tooltip': 'PEG ratio adjusts valuation for growth; under 2 is commonly viewed as reasonable for value stocks.'
-        },
-        {
-            'label': 'ROIC > 10%',
-            'value_display': format_check_value(roic_value, is_percent=True),
-            'threshold_display': '> 10%',
-            'status': check_status(roic_value, 0.10, 'gt'),
-            'tooltip': 'Return on invested capital shows how effectively the business deploys capital into returns.'
-        },
-        {
-            'label': 'Gross Margin > 50%',
-            'value_display': format_check_value(gross_margin_value, is_percent=True),
-            'threshold_display': '> 50%',
-            'status': check_status(gross_margin_value, 0.50, 'gt'),
-            'tooltip': 'A strong gross margin indicates the business retains more revenue after direct costs.'
-        }
-    ]
+        promoter_holding_value = None
 
     company_essentials = {
         'market_cap': format_inr_crore(yq_price.get('marketCap') or info.get('marketCap')),
@@ -370,7 +298,7 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
         'eps': safe_value(yq_financial.get('trailingEps') or info.get('trailingEps')),
         'roe': format_percent(yq_financial.get('returnOnEquity')),
         'roce': format_percent(yq_financial.get('returnOnAssets')),
-        'promoter_holding': safe_value(nse_quote.get('promoterHolding')),
+        'promoter_holding': safe_value(promoter_holding_value),
         'sales_growth': 'N/A',
         'profit_growth': 'N/A'
     }
@@ -396,24 +324,19 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
             '52 Week Low': nse_quote.get('low52'),
             'Volume': nse_quote.get('quantityTraded')
         }
-    else:
-        try:
-            nse_data = get_nse().get_quote(symbol.lower())
-            if isinstance(nse_data, dict):
-                nse_info = {
-                    'Last Traded Price': nse_data.get('lastPrice'),
-                    'Day High': nse_data.get('dayHigh'),
-                    'Day Low': nse_data.get('dayLow'),
-                    '52 Week High': nse_data.get('high52'),
-                    '52 Week Low': nse_data.get('low52'),
-                    'Volume': nse_data.get('quantityTraded')
-                }
-        except Exception:
-            nse_info = {}
+        nse_current_price = _safe_float(nse_data.get('lastPrice') or nse_data.get('ltp'))
+        nse_previous_close = _safe_float(nse_data.get('previousClose') or nse_data.get('prevClose'))
+        if current_price is None and nse_current_price is not None:
+            current_price = nse_current_price
+        if previous_close is None and nse_previous_close is not None:
+            previous_close = nse_previous_close
+    except Exception:
+        nse_info = {}
 
+    # If market time is numeric, convert to India time string.
     market_time = yq_price.get('regularMarketTime') or ''
     if isinstance(market_time, (int, float)) and market_time > 0:
-        from datetime import timezone, timedelta
+        from datetime import datetime, timezone, timedelta
         india_tz = timezone(timedelta(hours=5, minutes=30))
         try:
             market_time = datetime.fromtimestamp(market_time, tz=timezone.utc).astimezone(india_tz).strftime('%Y-%m-%d %H:%M %Z')
@@ -506,73 +429,168 @@ def get_trending_stocks():
 
     return trending
 
+
+def _safe_float(value):
+    try:
+        if isinstance(value, str):
+            return float(value.replace(',', ''))
+        return float(value)
+    except Exception:
+        return None
+
+
+def fetch_index_quote_data():
+    index_map = {
+        'nifty50': 'NIFTY 50',
+        'banknifty': 'NIFTY BANK',
+        'finnifty': 'NIFTY FIN SERVICE',
+        'sensex': '^BSESN',
+        'midcpnifty': 'NIFTY MID SELECT'
+    }
+    index_data = {}
+
+    for index_id, api_name in index_map.items():
+        quote = {}
+        if index_id == 'sensex':
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker(api_name)
+                info = ticker.info
+                quote = {
+                    'last': info.get('regularMarketPrice'),
+                    'previousClose': info.get('regularMarketPreviousClose'),
+                    'percentChange': info.get('regularMarketChangePercent'),
+                    'variation': None
+                }
+            except Exception:
+                quote = {}
+        else:
+            try:
+                quote = get_nse().get_index_quote(api_name) or {}
+            except Exception:
+                quote = {}
+
+        last = _safe_float(quote.get('last') or quote.get('current_price') or quote.get('previousClose'))
+        previous = _safe_float(quote.get('previousClose') or quote.get('prevclose') or quote.get('prev_close') or quote.get('previousDayVal'))
+        percent = _safe_float(quote.get('percentChange') or quote.get('percent_change') or quote.get('percentchange') or quote.get('variation'))
+        variation = _safe_float(quote.get('variation') or quote.get('change') or quote.get('net_change'))
+
+        if last is not None and previous is not None and variation is None:
+            variation = round(last - previous, 2)
+        if percent is None and last is not None and previous is not None and previous != 0:
+            percent = round((last - previous) / previous * 100, 2)
+
+        direction = 'positive' if last is not None and previous is not None and last >= previous else 'negative'
+        index_data[index_id] = {
+            'last': f"{last:,.2f}" if last is not None else 'N/A',
+            'change': f"{variation:+,.2f}" if variation is not None else 'N/A',
+            'percent': f"{percent:.2f}" if percent is not None else 'N/A',
+            'direction': direction,
+            'raw_change': variation,
+            'raw_percent': percent
+        }
+
+    return index_data
+
+
 @app.route("/")
 def home():
     theme = request.args.get("theme", "light")
     trending_stocks = get_trending_stocks()
-    return render_template("home.html", theme=theme, trending_stocks=trending_stocks)
+    market_indices = []
+
+    try:
+        live_index_data = fetch_index_quote_data()
+        index_names = {
+            'nifty50': 'NIFTY 50',
+            'banknifty': 'BANK NIFTY',
+            'finnifty': 'FIN NIFTY',
+            'sensex': 'SENSEX',
+            'midcpnifty': 'MIDCP NIFTY'
+        }
+        market_indices = [
+            {
+                'id': index_id,
+                'name': index_names.get(index_id, index_id.upper()),
+                'value': index_info.get('last', 'N/A'),
+                'change': index_info.get('change', 'N/A'),
+                'percent': index_info.get('percent', 'N/A'),
+                'direction': index_info.get('direction', 'negative')
+            }
+            for index_id, index_info in live_index_data.items()
+        ]
+    except Exception:
+        market_indices = [
+            {'id': 'nifty50', 'name': 'NIFTY 50', 'value': '23,547.75', 'change': '-359.40', 'percent': '-1.50', 'direction': 'down'},
+            {'id': 'banknifty', 'name': 'BANK NIFTY', 'value': '54,239.20', 'change': '-614.65', 'percent': '-1.12', 'direction': 'down'},
+            {'id': 'finnifty', 'name': 'FIN NIFTY', 'value': '25,354.00', 'change': '-398.20', 'percent': '-1.55', 'direction': 'down'},
+            {'id': 'sensex', 'name': 'SENSEX', 'value': '74,775.74', 'change': '-1,092.06', 'percent': '-1.44', 'direction': 'down'},
+            {'id': 'midcpnifty', 'name': 'MIDCP NIFTY', 'value': '14,474.90', 'change': '-231.05', 'percent': '-1.57', 'direction': 'down'},
+        ]
+
+    return render_template("home.html", theme=theme, trending_stocks=trending_stocks, market_indices=market_indices)
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if request.method == "POST":
         symbol = request.form.get("symbol", "RELIANCE").strip().split(",")[0].strip()
-        theme = request.form.get("theme", "light")
+        theme = request.form.get("theme", "dark")
     else:
         symbol = request.args.get("symbol", "RELIANCE").strip().split(",")[0].strip()
-        theme = request.args.get("theme", "light")
+        theme = request.args.get("theme", "dark")
 
     if not symbol:
         symbol = "RELIANCE"
 
     # Add to recent searches
     add_recent_search(symbol)
+
+    stock_data_list = [get_stock_data(symbol, period='1y')]
+    peer_stocks = get_trending_stocks()
+
+    # AI Prediction
+    predictions = {}
+    insights_dict = {}
     symbol_upper = symbol.upper()
-
+    
     try:
-        stock_data_list = [get_stock_data(symbol, period='1y')]
-        
-        # Check if stock data is invalid (no price data)
-        if not stock_data_list or stock_data_list[0].get('current_price') is None:
-            suggestions = get_stock_suggestions(symbol)
-            return render_template(
-                "error.html",
-                theme=theme,
-                error_message=f"Stock symbol '{symbol_upper}' not found or has no data.",
-                suggestions=suggestions
-            ), 404
-
-        # AI Prediction
-        predictions = {}
-        insights_dict = {}
         get_stock_predictor().train(symbol_upper)
         predictions[symbol_upper] = get_stock_predictor().predict(symbol_upper)
         insights_dict[symbol_upper] = get_stock_predictor().get_insights(symbol_upper)
-
-        return render_template(
-            "dashboard.html",
-            symbol=symbol_upper,
-            theme=theme,
-            stock_data_list=stock_data_list,
-            predictions=predictions,
-            insights=insights_dict
-        )
-    except AttributeError as e:
-        suggestions = get_stock_suggestions(symbol)
-        return render_template(
-            "error.html",
-            theme=theme,
-            error_message=f"Error processing stock '{symbol_upper}'. It may not exist or be delisted. Please try another symbol.",
-            suggestions=suggestions
-        ), 400
     except Exception as e:
-        get_logger().error(f"Dashboard error for {symbol_upper}: {str(e)}")
-        suggestions = get_stock_suggestions(symbol)
-        return render_template(
-            "error.html",
-            theme=theme,
-            error_message=f"Error loading stock data. Please check the symbol and try again.",
-            suggestions=suggestions
-        ), 500
+        # Gracefully handle prediction errors (delisted stocks, API failures, model not trained, etc.)
+        error_msg = str(e)
+        get_logger().warning(f"Predictor error for {symbol_upper}: {error_msg}")
+        predictions[symbol_upper] = {}
+        insights_dict[symbol_upper] = {
+            'direction': 'Data processing',
+            'direction_symbol': '⏳',
+            'confidence': None,
+            'breakout_confirmation': 'Model training in background. Check back soon.',
+            'forecast': 'Insufficient historical data for predictions',
+            'predicted_next': None,
+            'advice': 'Showing latest market data. AI insights will be available after training.',
+            'trailing_stop_pct': None
+        }
+
+    return render_template(
+        "dashboard.html",
+        symbol=symbol_upper,
+        theme=theme,
+        stock_data_list=stock_data_list,
+        predictions=predictions,
+        insights=insights_dict,
+        peer_stocks=peer_stocks
+    )
+
+@app.route("/index_data")
+def index_data():
+    try:
+        index_data = fetch_index_quote_data()
+    except Exception as e:
+        return jsonify(error="Unable to fetch index data", details=str(e)), 500
+    return jsonify(index_data)
+
 
 @app.route("/chart_data")
 def chart_data():
@@ -583,6 +601,52 @@ def chart_data():
     stock = get_stock_data(symbol, period=period)
     return jsonify(hist_json=stock["hist_json"])
 
+@app.route("/stock_data")
+def stock_data():
+    symbol = request.args.get("symbol", "RELIANCE").strip().split(",")[0].strip()
+    period = request.args.get("period", "1y")
+    if not symbol:
+        symbol = "RELIANCE"
+
+    try:
+        stock = get_stock_data(symbol, period=period)
+    except Exception as e:
+        return jsonify(
+            symbol=symbol.upper(),
+            hist_json=[],
+            current_price=None,
+            previous_close=None,
+            price_change=None,
+            price_change_percent=None,
+            market_time='',
+            price_summary={},
+            company_essentials={},
+            stock_profile={
+                'company_name': symbol.upper(),
+                'sector': 'N/A',
+                'industry': 'N/A',
+                'summary': '',
+                'website': '',
+                'exchange': 'NSE',
+                'market_state': ''
+            },
+            error="Unable to fetch stock data",
+            details=str(e)
+        ), 200
+
+    return jsonify(
+        symbol=stock["symbol"],
+        hist_json=stock["hist_json"],
+        current_price=stock["current_price"],
+        previous_close=stock["previous_close"],
+        price_change=stock["price_change"],
+        price_change_percent=stock["price_change_percent"],
+        market_time=stock["market_time"],
+        price_summary=stock["price_summary"],
+        company_essentials=stock["company_essentials"],
+        stock_profile=stock["stock_profile"]
+    )
+
 @app.before_request
 def log_request_info():
     pass  # Logging disabled for now
@@ -590,7 +654,15 @@ def log_request_info():
     # get_logger().debug(f"Request data: {request.args}")
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Replace the default Flask server banner with a custom local startup message.
+    import os
+    import flask.cli
+    flask.cli.show_server_banner = lambda *args, **kwargs: None
+
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        print("StockSense AI local server starting at http://127.0.0.1:5000")
+
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
 # stock_web_app.py
 # This file is part of the StockSense AI project.
-# It provides a Flask web application to display stock data and predictions.    
+# It provides a Flask web application to display stock data and predictions.

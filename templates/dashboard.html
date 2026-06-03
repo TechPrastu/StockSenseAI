@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StockSense AI Dashboard</title>
+    <title>StockSense AI | Dashboard</title>
+    <meta name="description" content="StockSense AI dashboard for Indian equities with charts, predictions, and peer comparisons." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,12 +13,12 @@
 </head>
 <body class="{{ theme }}">
     <div class="app-shell">
-        <header class="topbar">
+        <header class="topbar card">
             <div class="topbar-header">
                 <div class="brand">
                     <div class="brand-tag">StockSense AI</div>
-                    <h1>Indian Stock Dashboard</h1>
-                    <p>Track live stock data, historical trends, and AI-driven insights in a clean, responsive view.</p>
+                    <h1>StockSense AI Dashboard</h1>
+                    <p>StockSense AI platform for NSE charts, fundamentals, predictions, and peer comparison.</p>
                 </div>
                 <div class="topbar-actions">
                     <a href="/" class="nav-pill">Home</a>
@@ -27,8 +28,9 @@
             <form method="POST" class="dashboard-form" id="dashboard-form">
                 <label class="search-field">
                     <span>Search stock symbol</span>
-                    <div class="search-wrapper">
-                        <input class="home-search-input" type="text" name="symbol" value="{{ symbol }}" placeholder="RELIANCE" required>
+                    <div class="search-wrapper autocomplete-wrapper">
+                        <input class="home-search-input" type="text" id="dashboard-stock-search" name="symbol" aria-label="Search stock symbol" value="{{ symbol }}" placeholder="RELIANCE" autocomplete="off" required>
+                        <ul id="dashboard-search-suggestions" class="search-suggestions"></ul>
                         <button class="search-submit" type="submit">Search</button>
                     </div>
                 </label>
@@ -39,324 +41,279 @@
             </form>
         </header>
 
-        <main class="grid">
+        <main class="dashboard-shell">
             {% for stock in stock_data_list %}
-            <section class="stock-card card">
-                <div class="ticker-hero">
-                    <div class="ticker-details">
-                        <div class="ticker-title-bar">
+            <section class="dashboard-hero card">
+                <div class="dashboard-hero-summary">
+                    <div class="dashboard-summary-head">
+                        <div class="dashboard-summary-title">
+                            <div class="hero-tag">Stock Overview</div>
                             <h2>{{ stock.stock_profile.company_name }}</h2>
-                            <span class="market-sentiment-badge sentiment-{{ stock.market_sentiment.class }}" title="Market sentiment based on latest price move">
-                                {{ stock.market_sentiment.icon }} {{ stock.market_sentiment.label }}
-                            </span>
-                        </div>
-                        <div class="ticker-tags">
-                            <span class="tag">NSE: {{ stock.symbol }}</span>
-                            <span class="tag">{{ stock.stock_profile.industry or 'Industry' }}</span>
-                            {% if stock.stock_profile.exchange %}
-                                <span class="tag">{{ stock.stock_profile.exchange }}</span>
-                            {% endif %}
-                        </div>
-                        <div class="metric-chips">
-                            <div class="metric-chip"><strong>Market Cap</strong><span>{{ stock.company_essentials.market_cap }}</span></div>
-                            <div class="metric-chip"><strong>P/E Ratio</strong><span>{{ stock.company_essentials.pe_ratio | default('N/A') }}</span></div>
-                            <div class="metric-chip"><strong>ROE</strong><span>{{ stock.company_essentials.roe }}</span></div>
-                            <div class="metric-chip"><strong>Div Yield</strong><span>{{ stock.company_essentials.div_yield }}</span></div>
-                        </div>
-                        <div class="summary-badges-row">
-                            <div class="summary-badge">
-                                <span class="badge-icon">📈</span>
-                                <div class="badge-content">
-                                    <span>52W Range</span>
-                                    <strong>{{ stock.price_summary.week_low | default('N/A') }}<br>{{ stock.price_summary.week_high | default('N/A') }}</strong>
-                                </div>
+                            <div class="dashboard-subtitle">
+                                {% if stock.stock_profile.website %}
+                                <a href="{{ stock.stock_profile.website }}" target="_blank" rel="noopener noreferrer">{{ stock.stock_profile.website | replace('https://', '') | replace('http://', '') }}</a>
+                                <span class="divider">•</span>
+                                {% endif %}
+                                <span class="ticker-chip">NSE: {{ stock.symbol }}</span>
+                                <span class="ticker-chip">BSE: {{ stock.stock_profile.exchange or 'N/A' }}</span>
                             </div>
-                            <div class="summary-badge">
-                                <span class="badge-icon">📊</span>
-                                <div class="badge-content">
-                                    <span>Volume</span>
-                                    <strong>{{ stock.nse_fields.get('Volume', 'N/A') if stock.nse_fields else 'N/A' }}</strong>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-hero-quote">
+                        <div class="stock-summary-card card">
+                            <div class="stock-summary-header">
+                                <div>
+                                    <span class="hero-tag">Live Quote</span>
+                                    <div class="price-market-title">LIVE PRICE</div>
+                                    <div class="price-market-value" id="live-price-{{ stock.symbol }}">₹ {{ stock.current_price | default('N/A') }}</div>
+                                    <div id="price-change-{{ stock.symbol }}" class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                        <span class="price-change-symbol"></span>
+                                        {% if stock.price_change is not none %}
+                                            {% if stock.price_change >= 0 %}+{% endif %}{{ stock.price_change | round(2) }}
+                                            ({{ stock.price_change_percent | round(2) }}%)
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="summary-badge">
-                                <span class="badge-icon">⏱️</span>
-                                <div class="badge-content">
+                                <div class="stock-badge">
                                     <span>Market State</span>
-                                    <strong>{{ stock.stock_profile.market_state }}</strong>
+                                    <strong id="market-state-{{ stock.symbol }}">{{ stock.stock_profile.market_state or 'N/A' }}</strong>
+                                </div>
+                            </div>
+                            <div class="stock-summary-meta">
+                                <span>BSE: Today, {{ stock.market_time or 'N/A' }}</span>
+                            </div>
+                            <div class="stock-summary-grid">
+                                <div class="summary-item">
+                                    <span>Last Update</span>
+                                    <strong id="market-time-{{ stock.symbol }}">{{ stock.market_time or 'N/A' }}</strong>
+                                </div>
+                                <div class="summary-item">
+                                    <span>52W High</span>
+                                    <strong id="week-high-{{ stock.symbol }}">{{ stock.price_summary.week_high | default('N/A') }}</strong>
+                                </div>
+                                <div class="summary-item">
+                                    <span>52W Low</span>
+                                    <strong id="week-low-{{ stock.symbol }}">{{ stock.price_summary.week_low | default('N/A') }}</strong>
+                                </div>
+                            </div>
+                            <div class="stock-summary-footer">
+                                <span class="external-links-label">Official Exchange Pages</span>
+                                <div class="external-links-buttons">
+                                    <a href="https://www.nseindia.com/get-quote/equity/{{ stock.symbol }}/{{ stock.stock_profile.company_name | replace(' ', '-') }}" target="_blank" rel="noopener noreferrer" class="external-link-btn nse-btn" aria-label="Open NSE page for {{ stock.symbol }}">NSE</a>
+                                    <a href="https://www.bseindia.com" target="_blank" rel="noopener noreferrer" class="external-link-btn bse-btn" aria-label="Open BSE site">BSE</a>
                                 </div>
                             </div>
                         </div>
-                        <div class="stock-hero-meta">
-                            {% set pass_count = stock.value_checklist | selectattr('status', 'equalto', 'pass') | list | length %}
-                            {% set checklist_total = stock.value_checklist | length %}
-                            <div class="stock-badge">Value Score <strong>{{ pass_count }}/{{ checklist_total }}</strong></div>
-                            <div class="stock-status">{{ stock.stock_profile.market_state or 'Market' }}</div>
-                        </div>
-                        {% if stock.nse_fields %}
-                        <div class="live-data-grid">
-                            {% for label, value in stock.nse_fields.items() %}
-                                <div class="live-data-card">
-                                    <span>{{ label }}</span>
-                                    <strong>{{ value or 'N/A' }}</strong>
-                                </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                    <div class="ticker-performance">
-                        <div class="price-block">
-                            <div class="price-label">LIVE PRICE</div>
-                            <div class="price-value">₹ {{ stock.current_price | default('N/A') }}</div>
-                            <div class="price-change {% if stock.price_change is not none and stock.price_change >= 0 %}positive{% else %}negative{% endif %}">
-                                {% if stock.price_change is not none %}
-                                    {% if stock.price_change >= 0 %}+{% endif %}{{ stock.price_change | round(2) }}
-                                    ({{ stock.price_change_percent | round(2) }}%)
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="market-meta">
-                            <div>BSE: Today</div>
-                            <div class="market-time">{{ stock.market_time }}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="summary-grid enhanced">
-                    <div class="stat-card">
-                        <h3>Price Summary</h3>
-                        <div class="stat-grid">
-                            <div><span>Today's High</span><strong>{{ stock.price_summary.today_high | default('N/A') }}</strong></div>
-                            <div><span>Today's Low</span><strong>{{ stock.price_summary.today_low | default('N/A') }}</strong></div>
-                            <div><span>52 Week High</span><strong>{{ stock.price_summary.week_high | default('N/A') }}</strong></div>
-                            <div><span>52 Week Low</span><strong>{{ stock.price_summary.week_low | default('N/A') }}</strong></div>
-                        </div>
-                    </div>
-                    <div class="stat-card essentials-card">
-                        <h3>Company Essentials</h3>
-                        <div class="essentials-grid">
-                            <div><span>Market Cap</span><strong>{{ stock.company_essentials.market_cap }}</strong></div>
-                            <div><span>Enterprise Value</span><strong>{{ stock.company_essentials.enterprise_value | default('N/A') }}</strong></div>
-                            <div><span>No. of Shares</span><strong>{{ stock.company_essentials.no_of_shares }}</strong></div>
-                            <div><span>P/E</span><strong>{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong></div>
-                            <div><span>P/B</span><strong>{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong></div>
-                            <div><span>Face Value</span><strong>{{ stock.company_essentials.face_value | default('N/A') }}</strong></div>
-                            <div><span>Div. Yield</span><strong>{{ stock.company_essentials.div_yield }}</strong></div>
-                            <div><span>Book Value (TTM)</span><strong>{{ stock.company_essentials.book_value }}</strong></div>
-                            <div><span>Cash</span><strong>{{ stock.company_essentials.cash }}</strong></div>
-                            <div><span>Debt</span><strong>{{ stock.company_essentials.debt }}</strong></div>
-                            <div><span>EPS (TTM)</span><strong>{{ stock.company_essentials.eps | default('N/A') }}</strong></div>
-                            <div><span>ROE</span><strong>{{ stock.company_essentials.roe }}</strong></div>
-                            <div><span>ROCE</span><strong>{{ stock.company_essentials.roce }}</strong></div>
-                            <div><span>Promoter Holding</span><strong>{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="fistar-card">
-                    <div class="fistar-title">FinStar</div>
-                    <div class="fistar-value">★★★☆☆</div>
-                    <div class="fistar-notes">
-                        <div><strong>Ownership</strong> Stable</div>
-                        <div><strong>Valuation</strong> Expensive</div>
-                        <div><strong>Efficiency</strong> Poor</div>
-                        <div><strong>Financials</strong> Average</div>
-                    </div>
-                </div>
-
-                <div class="chart-section">
-                    <div class="chart-tabs" id="chart-tabs-{{ stock.symbol }}">
-                        <button type="button" class="chart-tab active" onclick="setChartTab('{{ stock.symbol }}', 'price', this)">Price Chart</button>
-                        <button type="button" class="chart-tab" onclick="setChartTab('{{ stock.symbol }}', 'volume', this)">Volume Chart</button>
-                    </div>
-                    <div class="chart-toolbar">
-                        <div>
-                            <div class="chart-title">Price Trend</div>
-                            <p class="chart-subtitle">Interactive chart with period controls. Weekends and holiday gaps are minimized for a cleaner view.</p>
-                        </div>
-                        <div class="chart-buttons" id="chart-buttons-{{ stock.symbol }}">
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1d', this)">1d</button>
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1w', this)">1w</button>
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1m', this)">1m</button>
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '3m', this)">3m</button>
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '6m', this)">6m</button>
-                            <button type="button" class="chart-btn active" onclick="switchPeriod('{{ stock.symbol }}', '1y', this)">1y</button>
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '3y', this)">3y</button>
-                            <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '5y', this)">5y</button>
-                        </div>
-                    </div>
-                    <div class="chart-summary">
-                        <span class="chart-summary-label" id="chart-return-label-{{ stock.symbol }}">CAGR Return :</span>
-                        <span id="chart-return-value-{{ stock.symbol }}" class="chart-return-pill neutral">-</span>
-                    </div>
-                    <div class="chart-panel">
-                        <div id="plotly-chart-{{ stock.symbol }}"></div>
-                    </div>
-                </div>
-
-                <div class="company-summary">
-                    <h3>About {{ stock.stock_profile.company_name }}</h3>
-                    <p>{{ stock.stock_profile.summary or 'No company summary available at the moment.' }}</p>
-                    <div class="company-details">
-                        <div><strong>Sector</strong><span>{{ stock.stock_profile.sector or 'N/A' }}</span></div>
-                        <div><strong>Industry</strong><span>{{ stock.stock_profile.industry or 'N/A' }}</span></div>
-                        <div><strong>Exchange</strong><span>{{ stock.stock_profile.exchange or 'N/A' }}</span></div>
-                        <div><strong>Website</strong><span>{{ stock.stock_profile.website or 'N/A' }}</span></div>
-                    </div>
-                    <div class="value-checklist-card">
-                        <h4>Value Stock Selection Checklist</h4>
-                        <div class="checklist-summary">
-                            <div class="checklist-score">
-                                <span class="checklist-score-pill">{{ pass_count }}/{{ checklist_total }} passed</span>
-                                <span class="checklist-summary-text">{{ 'Healthy value profile' if pass_count >= checklist_total / 2 else 'Review fundamentals' }}</span>
-                            </div>
-                            <div class="checklist-progress">
-                                <span class="checklist-progress-track"><span class="checklist-progress-fill" style="width: {{ (pass_count / checklist_total) * 100 if checklist_total else 0 }}%"></span></span>
-                            </div>
-                        </div>
-                        <div class="checklist-grid">
-                            {% for item in stock.value_checklist %}
-                                <div class="checklist-item status-{{ item.status }}">
-                                    <div class="checklist-icon">
-                                        {% if item.status == 'pass' %}
-                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 0-1.414 0L8 12.586 5.707 10.293a1 1 0 1 0-1.414 1.414l3 3a1 1 0 0 0 1.414 0l8-8a1 1 0 0 0 0-1.414z" clip-rule="evenodd"/></svg>
-                                        {% elif item.status == 'fail' %}
-                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-1.414-4.414a1 1 0 0 1 1.414 0L10 14.586l1.414-1.414a1 1 0 1 1 1.414 1.414L11.414 16l1.414 1.414a1 1 0 0 1-1.414 1.414L10 17.414l-1.414 1.414a1 1 0 0 1-1.414-1.414L8.586 16 7.172 14.586a1 1 0 1 1 1.414-1.414L10 14.586z" clip-rule="evenodd"/></svg>
-                                        {% else %}
-                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-10.5a1 1 0 10-2 0 1 1 0 002 0zm-1 3.5a.75.75 0 01.75.75v.5a.75.75 0 11-1.5 0v-.5A.75.75 0 019 11z" clip-rule="evenodd"/></svg>
-                                        {% endif %}
-                                    </div>
-                                    <div class="checklist-content">
-                                        <div class="checklist-label">{{ item.label }}</div>
-                                        <div class="checklist-meta">{{ item.value_display }} <span class="checklist-threshold">{{ item.threshold_display }}</span></div>
-                                    </div>
-                                    <div class="tooltip tooltip-right">
-                                        <span class="tooltip-trigger">i</span>
-                                        <div class="tooltip-content">{{ item.tooltip }}</div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
                     </div>
 
-                    {% if stock.corporate_events %}
-                    <div class=\"corporate-events-card\">
-                        <h4>Recent Corporate Events</h4>
-                        <div class=\"events-list\">
-                            {% for event in stock.corporate_events[:8] %}
-                                <div class=\"event-item event-{{ event.type|lower|replace(' ', '-') }}\">
-                                    <div class=\"event-badge\">
-                                        {% if 'Split' in event.type %}
-                                            📊
-                                        {% elif 'Dividend' in event.type %}
-                                            💰
-                                        {% else %}
-                                            📅
-                                        {% endif %}
-                                    </div>
-                                    <div class=\"event-content\">
-                                        <div class=\"event-type\">{{ event.type }}</div>
-                                        <div class=\"event-detail\">{{ event.detail }}</div>
-                                        <div class=\"event-date\">{{ event.date }}</div>
-                                    </div>
-                                    <div class=\"event-tooltip\">{{ event.description }}</div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-
-                <div class=\"stock-card__insights\">
-                    <h3>AI Insights</h3>
-                    <div class="insights-grid">
-                        <div class="insight-item">
-                            <div class="insight-title"><span class="insight-icon" title="Breakout">⚡</span> Breakout</div>
-                            <div class="insight-body">{{ insights[stock.symbol].breakout_confirmation }}</div>
-                            <div class="insight-sub">{{ insights[stock.symbol].breakout_prediction }}</div>
-                            {% if insights[stock.symbol].breakout_level is not none %}
-                                <div class="insight-meta">Level: {{ insights[stock.symbol].breakout_level | round(2) }}</div>
-                            {% endif %}
-                        </div>
-
-                        <div class="insight-item">
-                            <div class="insight-title"><span class="insight-icon" title="Direction">🔺</span> Direction</div>
-                            <div class="insight-body">{{ insights[stock.symbol].direction }} {{ insights[stock.symbol].direction_symbol }}</div>
-                            {% if insights[stock.symbol].confidence is not none %}
-                                <div class="insight-pill" title="Model confidence (higher is better)">Confidence: {{ (insights[stock.symbol].confidence * 100) | round(0) }}%</div>
-                            {% endif %}
-                        </div>
-
-                        <div class="insight-item">
-                            <div class="insight-title"><span class="insight-icon" title="Forecast">📊</span> Forecast</div>
-                            <div class="insight-body">{{ insights[stock.symbol].forecast }}</div>
-                            {% if insights[stock.symbol].predicted_next is not none %}
-                                <div class="insight-meta">Next: {{ insights[stock.symbol].predicted_next | round(2) }} ({{ insights[stock.symbol].forecast_lower | round(2) }} - {{ insights[stock.symbol].forecast_upper | round(2) }})</div>
-                            {% endif %}
-                            {% if insights[stock.symbol].volatility is not none %}
-                                <div class="insight-meta" title="Daily price volatility">Volatility: {{ (insights[stock.symbol].volatility * 100) | round(2) }}%</div>
-                            {% endif %}
-                        </div>
-
-                        <div class="insight-item">
-                            <div class="insight-title">Pattern</div>
-                            <div class="insight-body">{{ insights[stock.symbol].pattern_title or insights[stock.symbol].chart_pattern }}</div>
-                            {% if insights[stock.symbol].pattern_description %}
-                                <div class="insight-sub">{{ insights[stock.symbol].pattern_description }}</div>
-                            {% endif %}
-                            {% if insights[stock.symbol].pattern_notes %}
-                                <div class="insight-meta">Note: {{ insights[stock.symbol].pattern_notes }}</div>
-                            {% endif %}
-                        </div>
-                        <div class="insight-item insight-advice">
-                            <div class="insight-title">Action Advice</div>
-                            <div class="insight-body">{{ insights[stock.symbol].advice }}</div>
-                            {% if insights[stock.symbol].trailing_stop_pct is not none %}
-                                <div class="insight-meta">Suggested trailing stop: {{ insights[stock.symbol].trailing_stop_pct }}%</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="insight-sections">
-                        <div class="insight-section insight-section--panel">
-                            <h4>Latest News</h4>
-                            <ul>
-                                {% set news_list = insights[stock.symbol].news | selectattr('title') | list %}
-                                {% if news_list %}
-                                    {% for news in news_list[:5] %}
-                                        <li>
-                                            <strong>{{ news.title }}</strong>
-                                            {% if news.date %}<span class="news-date">({{ news.date }})</span>{% endif %}
-                                            <p>{{ news.summary }}</p>
-                                        </li>
-                                    {% endfor %}
-                                {% else %}
-                                    <li>No news found.</li>
-                                {% endif %}
-                            </ul>
-                        </div>
-
-                        <div class="insight-section insight-section--panel">
-                            <h4>Upcoming Events</h4>
-                            <ul>
-                                {% if insights[stock.symbol].events %}
-                                    {% for event in insights[stock.symbol].events %}
-                                        <li>{{ event.event }} <span class="news-date">{{ event.date }}</span></li>
-                                    {% endfor %}
-                                {% else %}
-                                    <li>No upcoming events.</li>
-                                {% endif %}
-                            </ul>
-                        </div>
+                    <div class="dashboard-hero-description">
+                        <p class="hero-description">{{ stock.stock_profile.summary or 'No summary available yet. Explore fundamentals, news, and predictions for this stock.' }}</p>
                     </div>
                 </div>
             </section>
+
+            <section class="dashboard-grid">
+                <aside class="dashboard-sidebar">
+                    <div class="card overview-card">
+                        <div class="section-title">Price Summary</div>
+                        <div class="overview-grid">
+                            <div><span>Today's High</span><strong id="today-high-{{ stock.symbol }}">{{ stock.price_summary.today_high | default('N/A') }}</strong></div>
+                            <div><span>Today's Low</span><strong id="today-low-{{ stock.symbol }}">{{ stock.price_summary.today_low | default('N/A') }}</strong></div>
+                            <div><span>52W High</span><strong id="week-high-{{ stock.symbol }}">{{ stock.price_summary.week_high | default('N/A') }}</strong></div>
+                            <div><span>52W Low</span><strong id="week-low-{{ stock.symbol }}">{{ stock.price_summary.week_low | default('N/A') }}</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="card overview-card">
+                        <div class="section-title">Company Essentials</div>
+                        <div class="overview-grid two-col">
+                            <div><span>Market Cap</span><strong id="market-cap-{{ stock.symbol }}">{{ stock.company_essentials.market_cap }}</strong></div>
+                            <div><span>Enterprise Value</span><strong id="enterprise-value-{{ stock.symbol }}">{{ stock.company_essentials.enterprise_value | default('N/A') }}</strong></div>
+                            <div><span>No. of Shares</span><strong id="no-shares-{{ stock.symbol }}">{{ stock.company_essentials.no_of_shares }}</strong></div>
+                            <div><span>P/E Ratio</span><strong id="company-pe-ratio-{{ stock.symbol }}">{{ stock.company_essentials.pe_ratio | default('N/A') }}</strong></div>
+                            <div><span>P/B Ratio</span><strong id="company-pb-ratio-{{ stock.symbol }}">{{ stock.company_essentials.pb_ratio | default('N/A') }}</strong></div>
+                            <div><span>Book Value</span><strong id="book-value-{{ stock.symbol }}">{{ stock.company_essentials.book_value }}</strong></div>
+                            <div><span>Total Cash</span><strong id="total-cash-{{ stock.symbol }}">{{ stock.company_essentials.cash }}</strong></div>
+                            <div><span>Promoter Stake</span><strong id="promoter-stake-{{ stock.symbol }}">{{ stock.company_essentials.promoter_holding | default('N/A') }}</strong></div>
+                            <div><span>Total Debt</span><strong id="total-debt-{{ stock.symbol }}">{{ stock.company_essentials.debt }}</strong></div>
+                            <div><span>EPS</span><strong id="eps-{{ stock.symbol }}">{{ stock.company_essentials.eps | default('N/A') }}</strong></div>
+                        </div>
+                    </div>
+
+                    <div class="card pros-cons-card">
+                        <div class="section-title">Pros</div>
+                        <ul class="list-group">
+                            <li>{{ insights[stock.symbol].direction or 'Trend direction not available.' }}</li>
+                            <li>{{ insights[stock.symbol].breakout_confirmation or 'Breakout data is unavailable.' }}</li>
+                            <li>Stable promoter holding and strong market cap.</li>
+                        </ul>
+                    </div>
+
+                    <div class="card pros-cons-card cons-card">
+                        <div class="section-title">Cons</div>
+                        <ul class="list-group">
+                            <li>{{ insights[stock.symbol].forecast or 'Forecast data not available.' }}</li>
+                            <li>{{ insights[stock.symbol].advice or 'No action advice available.' }}</li>
+                            <li>Valuation may be stretched versus peers.</li>
+                        </ul>
+                    </div>
+                </aside>
+
+                <section class="dashboard-main">
+                    <div class="card chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="section-title">Price Trend</div>
+                                <p class="chart-description">Interactive chart with period controls and volume overlay for easier decisions.</p>
+                            </div>
+                            <div class="chart-buttons" id="chart-buttons-{{ stock.symbol }}">
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1d', this)">1d</button>
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1w', this)">1w</button>
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '1m', this)">1m</button>
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '3m', this)">3m</button>
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '6m', this)">6m</button>
+                                <button type="button" class="chart-btn active" onclick="switchPeriod('{{ stock.symbol }}', '1y', this)">1y</button>
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '3y', this)">3y</button>
+                                <button type="button" class="chart-btn" onclick="switchPeriod('{{ stock.symbol }}', '5y', this)">5y</button>
+                            </div>
+                        </div>
+                        <div class="chart-tabs" id="chart-tabs-{{ stock.symbol }}">
+                            <button type="button" class="chart-tab active" onclick="setChartTab('{{ stock.symbol }}', 'price', this)">Price</button>
+                            <button type="button" class="chart-tab" onclick="setChartTab('{{ stock.symbol }}', 'volume', this)">Volume</button>
+                        </div>
+                        <div class="chart-summary">
+                            <span class="chart-summary-label" id="chart-return-label-{{ stock.symbol }}">CAGR Return :</span>
+                            <span id="chart-return-value-{{ stock.symbol }}" class="chart-return-pill neutral">-</span>
+                        </div>
+                        <div class="chart-panel">
+                            <div id="plotly-chart-{{ stock.symbol }}"></div>
+                        </div>
+                    </div>
+
+                    <div class="card insights-card">
+                        <div class="section-title">AI Insights</div>
+                        <div class="insights-grid">
+                            <div class="insight-item">
+                                <div class="insight-title"><span class="insight-icon">⚡</span> Breakout</div>
+                                <p>{{ insights[stock.symbol].breakout_confirmation or 'Breakout confirmation unavailable.' }}</p>
+                            </div>
+                            <div class="insight-item">
+                                <div class="insight-title"><span class="insight-icon">🔺</span> Direction</div>
+                                <p>{{ insights[stock.symbol].direction or 'No direction available.' }} {{ insights[stock.symbol].direction_symbol or '' }}</p>
+                                {% if insights[stock.symbol].confidence is not none %}
+                                    <span class="insight-pill">Confidence: {{ (insights[stock.symbol].confidence * 100) | round(0) }}%</span>
+                                {% endif %}
+                            </div>
+                            <div class="insight-item">
+                                <div class="insight-title"><span class="insight-icon">📊</span> Forecast</div>
+                                <p>{{ insights[stock.symbol].forecast or 'Forecast unavailable.' }}</p>
+                                {% if insights[stock.symbol].predicted_next is not none %}
+                                    <span class="insight-meta">Next: {{ insights[stock.symbol].predicted_next | round(2) }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="insight-item insight-advice">
+                                <div class="insight-title">Action Advice</div>
+                                <p>{{ insights[stock.symbol].advice or 'Advice unavailable.' }}</p>
+                                {% if insights[stock.symbol].trailing_stop_pct is not none %}
+                                    <span class="insight-meta">Trailing stop: {{ insights[stock.symbol].trailing_stop_pct }}%</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </section>
             {% endfor %}
+
+            <section class="peer-section card">
+                <div class="section-heading">
+                    <div>
+                        <h3>Top Searched Stocks</h3>
+                        <p>Popular NSE stocks that users are searching for the most right now.</p>
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table class="peer-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Company</th>
+                                <th>Sector</th>
+                                <th>Price</th>
+                                <th>Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for peer in peer_stocks %}
+                            <tr>
+                                <td>{{ peer.symbol }}</td>
+                                <td>{{ peer.name }}</td>
+                                <td>{{ peer.sector }}</td>
+                                <td>₹ {{ peer.price }}</td>
+                                <td class="{% if peer.change|float >= 0 %}positive{% else %}negative{% endif %}">{% if peer.change|float >= 0 %}+{% endif %}{{ peer.change }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </main>
+
+        <footer class="home-footer">
+            <p><strong>StockSense AI</strong> · Premium NSE dashboard with AI-backed stock analysis.</p>
+        </footer>
     </div>
 
     <script>
+        const stockList = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV', 'HINDUNILVR', 'LT', 'ASIANPAINT', 'AXISBANK', 'HCLTECH', 'ONGC', 'CDSL', 'WIPRO', 'MARUTI', 'BHARTIARTL', 'SBIN', 'ICICIBANK', 'KOTAKBANK', 'BAJAJFINSV', 'SUNPHARMA', 'TECHM', 'POWERGRID', 'JSWSTEEL', 'ADANIGREEN', 'TATASTEEL', 'GRASIM', 'BPCL', 'IOCL', 'APOLLOHOSP', 'DRREDDY'];
+
+        // Setup autocomplete for both home and dashboard search
+        function setupAutocomplete(inputId, suggestionsId) {
+            const inputField = document.getElementById(inputId);
+            const suggestionsList = document.getElementById(suggestionsId);
+
+            if (!inputField || !suggestionsList) return;
+
+            inputField.addEventListener('input', (e) => {
+                const query = e.target.value.toUpperCase().trim();
+                suggestionsList.innerHTML = '';
+
+                if (query.length === 0) {
+                    suggestionsList.style.display = 'none';
+                    return;
+                }
+
+                const matches = stockList.filter(stock => stock.includes(query)).slice(0, 8);
+
+                if (matches.length > 0) {
+                    suggestionsList.style.display = 'block';
+                    matches.forEach(stock => {
+                        const li = document.createElement('li');
+                        li.className = 'suggestion-item';
+                        li.textContent = stock;
+                        li.onclick = () => {
+                            inputField.value = stock;
+                            suggestionsList.innerHTML = '';
+                            suggestionsList.style.display = 'none';
+                        };
+                        suggestionsList.appendChild(li);
+                    });
+                } else {
+                    suggestionsList.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (e.target !== inputField && e.target !== suggestionsList && !suggestionsList.contains(e.target)) {
+                    suggestionsList.style.display = 'none';
+                }
+            });
+        }
+
+        // Initialize autocomplete for dashboard search
+        setupAutocomplete('dashboard-stock-search', 'dashboard-search-suggestions');
         const chartState = {};
 
         function formatPercentValue(value) {
@@ -373,6 +330,13 @@
         }
 
         function renderChart(symbol, histData, chartType = 'price') {
+            if (!Array.isArray(histData) || histData.length === 0) {
+                const chartContainer = document.getElementById(`plotly-chart-${symbol}`);
+                if (chartContainer) {
+                    chartContainer.innerHTML = '<div class="chart-empty">No chart data available.</div>';
+                }
+                return;
+            }
             const dates = histData.map(row => row.Date);
             const period = chartState[symbol] && chartState[symbol].period;
             const isIntraday = period === '1d';
@@ -412,7 +376,7 @@
                     type: 'date',
                     showgrid: false,
                     tickangle: -45,
-                    tickfont: { color: '#64748b' },
+                    tickfont: { color: '#94a3b8' },
                     tickformat: isIntraday ? '%H:%M' : undefined,
                     rangebreaks: [{ bounds: ['sat', 'mon'] }]
                 },
@@ -421,7 +385,7 @@
                     rangemode: chartType === 'price' ? 'normal' : 'tozero',
                     range: yRange,
                     showgrid: false,
-                    tickfont: { color: '#64748b' }
+                    tickfont: { color: '#94a3b8' }
                 },
                 shapes: shapes,
                 margin: { t: 20, l: 40, r: 30, b: 50 },
@@ -493,6 +457,81 @@
             pill.className = `chart-return-pill ${status}`;
         }
 
+        function updateStockSummary(symbol, data) {
+            const setText = (id, value) => {
+                const element = document.getElementById(`${id}-${symbol}`);
+                if (!element) return;
+                element.textContent = value ?? 'N/A';
+            };
+
+            setText('market-cap', data.company_essentials.market_cap);
+            setText('current-price', data.current_price !== null && data.current_price !== undefined ? `₹ ${Number(data.current_price).toFixed(2)}` : 'N/A');
+            setText('high-low', data.price_summary.week_high !== null && data.price_summary.week_low !== null ? `₹ ${data.price_summary.week_high} / ₹ ${data.price_summary.week_low}` : 'N/A');
+            setText('pe-ratio', data.company_essentials.pe_ratio);
+            setText('pb-ratio', data.company_essentials.pb_ratio);
+            setText('promoter-stake', data.company_essentials.promoter_holding);
+            setText('market-state', data.stock_profile.market_state);
+            setText('market-time', data.market_time);
+            setText('week-high', data.price_summary.week_high);
+            setText('week-low', data.price_summary.week_low);
+            setText('today-high', data.price_summary.today_high);
+            setText('today-low', data.price_summary.today_low);
+            setText('enterprise-value', data.company_essentials.enterprise_value);
+            setText('no-shares', data.company_essentials.no_of_shares);
+            setText('company-pe-ratio', data.company_essentials.pe_ratio);
+            setText('company-pb-ratio', data.company_essentials.pb_ratio);
+            setText('book-value', data.company_essentials.book_value);
+            setText('total-cash', data.company_essentials.cash);
+            setText('total-debt', data.company_essentials.debt);
+            setText('eps', data.company_essentials.eps);
+
+            const changeElement = document.getElementById(`price-change-${symbol}`);
+            if (changeElement) {
+                const change = data.price_change;
+                const changePct = data.price_change_percent;
+                if (change !== null && change !== undefined) {
+                    const formattedChange = `${change >= 0 ? '+' : ''}${Number(change).toFixed(2)} (${changePct !== null && changePct !== undefined ? Number(changePct * 100).toFixed(2) : '0.00'}%)`;
+                    changeElement.textContent = formattedChange;
+                    changeElement.classList.toggle('positive', change >= 0);
+                    changeElement.classList.toggle('negative', change < 0);
+                } else {
+                    changeElement.textContent = 'N/A';
+                    changeElement.classList.remove('positive', 'negative');
+                }
+            }
+
+            const priceElement = document.getElementById(`live-price-${symbol}`);
+            if (priceElement) {
+                priceElement.textContent = data.current_price !== null && data.current_price !== undefined ? `₹ ${Number(data.current_price).toFixed(2)}` : 'N/A';
+            }
+        }
+
+        function refreshStockData(symbol, period = '1y') {
+            fetch(`/stock_data?symbol=${symbol}&period=${period}`)
+                .then(response => response.ok ? response.json() : Promise.reject(response))
+                .then(data => {
+                    if (data.error) return;
+
+                    chartState[symbol] = chartState[symbol] || { period, chartType: 'price', histData: [] };
+                    chartState[symbol].period = period;
+                    chartState[symbol].histData = data.hist_json || chartState[symbol].histData;
+
+                    if (chartState[symbol].chartType) {
+                        renderChart(symbol, chartState[symbol].histData, chartState[symbol].chartType);
+                    }
+                    updateReturn(symbol, chartState[symbol].histData, period);
+                    updateStockSummary(symbol, data);
+                })
+                .catch(console.error);
+        }
+
+        function startLiveRefresh(symbol, period = '1y') {
+            refreshStockData(symbol, period);
+            setInterval(() => {
+                refreshStockData(symbol, chartState[symbol]?.period || period);
+            }, 60000);
+        }
+
         function setChartTab(symbol, type, button) {
             const tabs = document.querySelectorAll(`#chart-tabs-${symbol} .chart-tab`);
             tabs.forEach(tab => tab.classList.toggle('active', tab === button));
@@ -522,6 +561,7 @@
         chartState['{{ stock.symbol }}'] = { period: '1y', chartType: 'price', histData: initialData_{{ stock.symbol }} };
         renderChart('{{ stock.symbol }}', initialData_{{ stock.symbol }}, 'price');
         updateReturn('{{ stock.symbol }}', initialData_{{ stock.symbol }}, '1y');
+        startLiveRefresh('{{ stock.symbol }}', '1y');
         {% endfor %}
 
         function toggleTheme() {
@@ -544,6 +584,7 @@
             document.querySelectorAll('.theme-toggle').forEach(btn => {
                 btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
             });
+            document.title = 'StockSense AI | Dashboard';
         })();
     </script>
 </body>
