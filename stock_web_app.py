@@ -29,7 +29,6 @@ def get_stock_predictor():
 
 def add_recent_search(symbol):
     """Add a symbol to recent searches, keeping only unique entries."""
-    global _recent_searches
     symbol_upper = symbol.upper()
     if symbol_upper in _recent_searches:
         _recent_searches.remove(symbol_upper)
@@ -264,8 +263,6 @@ def get_stock_data(symbol, period='7d', table_period='7d'):
 
 def get_trending_stocks():
     """Fetch trending stocks data for the home page based on recent searches."""
-    global _recent_searches
-    
     # Default fallback stocks
     default_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'BAJAJFINSV']
     
