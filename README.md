@@ -1,30 +1,44 @@
 # StockSenseAI
 
-StockSenseAI is a web application and command-line tool designed to provide users with insights into stock market data, including real-time stock prices, historical data, and AI-driven stock predictions. The application leverages the power of financial data APIs and machine learning algorithms to assist users in making informed investment decisions.
+StockSenseAI is a web application and command-line tool for Indian stock market insights. It combines live NSE and Yahoo Finance data with AI-powered forecasting, modern dashboard UX, and automated CI workflows.
 
 ## Features
 
-- **Real-time Stock Data**: Fetches and displays current stock prices and historical data using Yahoo Finance and NSE APIs.
-- **Interactive Dashboard**: A user-friendly interface that allows users to input stock symbols and view detailed information, including price charts and historical tables.
-- **AI Stock Predictions**: Utilizes machine learning models to predict future stock prices based on historical data.
-- **Customizable Themes**: Users can switch between light and dark themes for a personalized experience.
-- **Command-Line Interface (CLI)**: Get AI-powered stock insights directly in your terminal.
+- **Live Market Indexes**: Home page displays live NSE index cards, including NIFTY, BANK NIFTY, FIN NIFTY, SENSEX, and MIDCP NIFTY.
+- **Stock Search & Preview**: Search symbols with autocomplete and preview live stock prices instantly.
+- **Dashboard Analytics**: View stock overview, company essentials, price charts, historical trend data, and AI prediction insights.
+- **Top Searched Stocks**: Dashboard highlights frequently searched NSE stocks as a “Top Searched Stocks” table.
+- **Custom Themes**: Light and dark theme support for better readability.
+- **AI Predictions**: Historical model-based insights and direction forecasts for selected stocks.
+- **CLI Support**: Use the command-line interface for quick stock lookup and AI-driven insights.
+- **GitHub Actions CI**: Workflow coverage includes Python test and lint pipelines with Python 3.12 support.
 
 ## Project Structure
 
-```
+```text
 StockSenseAI
+├── .github
+│   └── workflows
+│       ├── python-package.yml
+│       └── python-test.yml
 ├── ai
 │   ├── __init__.py
+│   ├── logger.py
+│   ├── patterns.json
 │   ├── predictor.py
-│   ├── utils.py
-│   └── logger.py
+│   └── utils.py
 ├── static
 │   └── style.css
 ├── templates
-│   └── index.html
-├── stock_web_app.py
+│   ├── dashboard.html
+│   └── home.html
+├── tests
+│   ├── __init__.py
+│   └── test_predictor.py
 ├── cli_app.py
+├── inspect_yq.py
+├── stock_web_app.py
+├── test_data.py
 ├── requirements.txt
 └── README.md
 ```
@@ -32,13 +46,13 @@ StockSenseAI
 ## Installation
 
 1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/StockSenseAI.git
+   ```bash
+   git clone https://github.com/TechPrastu/StockSenseAI.git
    cd StockSenseAI
    ```
 
-2. Install the required dependencies:
-   ```
+2. Install dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
 
@@ -46,42 +60,41 @@ StockSenseAI
 
 ### Web Application
 
-1. Run the application:
-   ```
+1. Start the Flask app:
+   ```bash
    python stock_web_app.py
    ```
 
-2. Open your web browser and navigate to `http://127.0.0.1:5000/`.
+2. Open your browser and go to:
+   ```text
+   http://127.0.0.1:5000/
+   ```
 
-3. Enter stock symbols (comma-separated) in the input field and select the desired time range to view stock data and predictions.
+3. Search for stock symbols like `RELIANCE`, `TCS`, or `INFY` to view the dashboard and stock overview.
 
 ### Command-Line Interface (CLI)
 
-You can also use StockSenseAI directly from your terminal:
+Run stock lookups from the terminal:
 
-```
-python cli_app.py [STOCK_SYMBOLS]
-```
-
-- `STOCK_SYMBOLS`: Comma-separated list of stock symbols (e.g. RELIANCE,TCS,INFY)
-- `--help`: Show help message and usage examples
-
-**Examples:**
-```
+```bash
 python cli_app.py RELIANCE
 python cli_app.py RELIANCE,TCS
 python cli_app.py --help
 ```
 
-The CLI will display AI-powered insights, predictions, news, and events for each stock symbol.
+## Testing
 
-## AI Module
+Run the unit tests with pytest:
 
-The AI functionality is encapsulated in the `ai` directory, which includes:
+```bash
+pytest tests/test_predictor.py -q
+```
 
-- **predictor.py**: Contains the `StockPredictor` class for training and evaluating stock prediction models.
-- **utils.py**: Provides utility functions for data preprocessing and feature extraction.
-- **logger.py**: Provides a logger utility for consistent logging across the project.
+## Key Notes
+
+- Home page now uses live index data and removes unsupported `GIFT NIFTY` cards.
+- Dashboard no longer shows a misleading peer comparison section — it now displays top searched stocks.
+- CI workflows were improved with YAML fixes, Python 3.12 support, and `actions/setup-python@v5` alignment.
 
 ## Contributing
 
@@ -101,4 +114,10 @@ fixes.
    for changes (example branch name: `fix/ci-upload-artifact-v4`).
 
 If you'd like, I can open a small PR with only this README update on the current feature branch.
+Contributions are welcome! Please open an issue or submit a pull request for new features, bug fixes, or documentation updates.
+
+## License
+
+This repository does not currently specify a license. Add one if you want to share the project publicly.
+
 

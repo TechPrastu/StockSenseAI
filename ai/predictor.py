@@ -94,6 +94,41 @@ def detect_moving_average_breakout(hist):
     return None
 
 
+def detect_ema_alignment(hist):
+    """Placeholder for EMA alignment detection."""
+    return None
+
+
+def detect_ema_pullback(hist):
+    """Placeholder for EMA pullback detection."""
+    return None
+
+
+def detect_vwap_support(hist):
+    """Placeholder for VWAP support detection."""
+    return None
+
+
+def detect_cup_and_handle(hist):
+    """Placeholder for cup and handle pattern detection."""
+    return None
+
+
+def detect_flat_base(hist):
+    """Placeholder for flat base pattern detection."""
+    return None
+
+
+def detect_falling_wedge(hist):
+    """Placeholder for falling wedge pattern detection."""
+    return None
+
+
+def detect_three_drives(hist):
+    """Placeholder for three drives pattern detection."""
+    return None
+
+
 def detect_double_top(hist):
     """Heuristic double-top detection based on two similar peaks separated by a trough."""
     try:
@@ -506,6 +541,7 @@ class StockPredictor:
             "volatility": volatility,
             "confidence": confidence,
             "chart_pattern": chart_pattern,
+            "pattern_title": chart_pattern or "No clear pattern detected",
             "news": news_items,
             "events": events_items
         }
