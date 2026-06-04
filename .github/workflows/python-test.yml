@@ -32,22 +32,26 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/test_predictor.py -q
+          pytest tests/test_predictor.py -q | tee pytest.log
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: test-results/
+          if-no-files-found: ignore
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage-report/
+          if-no-files-found: ignore
       - name: Upload pytest logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pytest-logs
           path: pytest.log
+          if-no-files-found: ignore

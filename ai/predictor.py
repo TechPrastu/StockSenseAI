@@ -541,6 +541,7 @@ class StockPredictor:
             "volatility": volatility,
             "confidence": confidence,
             "chart_pattern": chart_pattern,
+            "pattern_title": chart_pattern or "No clear pattern detected",
             "news": news_items,
             "events": events_items
         }
