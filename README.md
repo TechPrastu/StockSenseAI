@@ -86,4 +86,19 @@ The AI functionality is encapsulated in the `ai` directory, which includes:
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug
+fixes.
+
+## Recent Changes
+
+- CI updates: added Python 3.12 to the test matrix, upgraded `actions/setup-python` to `v5`, and
+   migrated artifact uploads to `actions/upload-artifact@v4` with safe `if-no-files-found: ignore` to
+   prevent failures when no artifacts are produced.
+- Dashboard/UI: removed unsupported index "GIFT NIFTY" from the home page and renamed the
+   dashboard "Peer Comparison" section to "Top Searched Stocks" to better reflect displayed data.
+- Tests: fixed a missing `pattern_title` field returned by `ai.predictor.StockPredictor.get_insights()`
+   which resolved a unit test expectation.
+- Branch workflow: please avoid committing directly to `main`; create a feature branch and open a PR
+   for changes (example branch name: `fix/ci-upload-artifact-v4`).
+
+If you'd like, I can open a small PR with only this README update on the current feature branch.
 
