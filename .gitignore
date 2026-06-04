@@ -31,3 +31,4 @@ Icon?
 models/
 *.pkl
 *.joblib
+data/top_searched_stocks.json

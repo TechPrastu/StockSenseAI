@@ -87,8 +87,8 @@
                             </div>
                             <div class="stock-summary-grid">
                                 <div class="summary-item">
-                                    <span>Last Update</span>
-                                    <strong id="market-time-{{ stock.symbol }}">{{ stock.market_time or 'N/A' }}</strong>
+                                    <span>Last Change</span>
+                                    <strong id="value-updated-{{ stock.symbol }}">{{ stock.value_updated_at or '--' }}</strong>
                                 </div>
                                 <div class="summary-item">
                                     <span>52W High</span>
@@ -447,6 +447,7 @@
             setText('promoter-stake', data.company_essentials.promoter_holding);
             setText('market-state', data.stock_profile.market_state);
             setText('market-time', data.market_time);
+            setText('value-updated', data.value_updated_at || '--');
             setText('week-high', data.price_summary.week_high);
             setText('week-low', data.price_summary.week_low);
             setText('today-high', data.price_summary.today_high);
