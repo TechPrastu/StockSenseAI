@@ -3,48 +3,139 @@
     "count": 7,
     "last_searched_at": "10:11:16 IST",
     "fallback": {
-      "name": "TATA CONSULTANCY SERV LT",
+      "name": "Tata Consultancy Services Limited",
       "sector": "Technology",
-      "price": "2277.70",
-      "change": "-6.91",
-      "updated_at": "10:12:51 IST"
+      "price": "2241.00",
+      "change": "-0.03",
+      "updated_at": "08:01:00 IST"
     },
-    "last_updated_at": "10:12:51 IST"
+    "last_updated_at": "08:01:00 IST"
   },
   "INFY": {
     "count": 3,
     "last_searched_at": "10:05:13 IST",
     "fallback": {
-      "name": "INFOSYS LIMITED",
+      "name": "Infosys Limited",
       "sector": "Technology",
-      "price": "1220.80",
-      "change": "-3.93",
-      "updated_at": "10:12:51 IST"
+      "price": "1201.30",
+      "change": "-1.74",
+      "updated_at": "08:01:00 IST"
     },
-    "last_updated_at": "10:12:51 IST"
+    "last_updated_at": "08:01:00 IST"
   },
   "RELIANCE": {
     "count": 1,
     "last_searched_at": "09:53:04 IST",
     "fallback": {
-      "name": "RELIANCE INDUSTRIES LTD",
+      "name": "Reliance Industries Limited",
       "sector": "Energy",
-      "price": "1304.20",
-      "change": "-0.79",
-      "updated_at": "10:12:51 IST"
+      "price": "1313.20",
+      "change": "-0.11",
+      "updated_at": "08:51:51 IST"
     },
-    "last_updated_at": "10:12:51 IST"
+    "last_updated_at": "08:51:51 IST"
   },
   "BSE": {
-    "count": 5,
-    "last_searched_at": "10:12:45 IST",
+    "count": 6,
+    "last_searched_at": "08:42:52 IST",
     "fallback": {
-      "name": "BSE LIMITED",
+      "name": "BSE Limited",
       "sector": "Financial Services",
-      "price": "3884.50",
-      "change": "-1.21",
-      "updated_at": "10:12:51 IST"
+      "price": "4033.40",
+      "change": "1.70",
+      "updated_at": "08:01:00 IST"
     },
-    "last_updated_at": "10:12:51 IST"
+    "last_updated_at": "08:01:00 IST"
+  },
+  "CDSL": {
+    "count": 1,
+    "last_searched_at": "08:45:26 IST",
+    "fallback": {
+      "name": "Central Depository Services (India) Limited",
+      "sector": "Financial Services",
+      "price": "1216.90",
+      "change": "-0.11",
+      "updated_at": "07:44:13 IST"
+    },
+    "last_updated_at": "07:44:13 IST"
+  },
+  "ITC": {
+    "count": 2,
+    "last_searched_at": "08:54:47 IST",
+    "fallback": {
+      "name": "ITC Limited",
+      "sector": "Consumer Defensive",
+      "price": "280.30",
+      "change": "1.19",
+      "updated_at": "08:01:00 IST"
+    },
+    "last_updated_at": "08:01:00 IST"
+  },
+  "VADILALIND": {
+    "count": 1,
+    "last_searched_at": "08:55:20 IST",
+    "fallback": {
+      "name": "VADILALIND",
+      "sector": "N/A",
+      "price": "N/A",
+      "change": "0.00",
+      "updated_at": "--"
+    }
+  },
+  "IFCI": {
+    "count": 1,
+    "last_searched_at": "07:42:36 IST",
+    "fallback": {
+      "name": "IFCI",
+      "sector": "N/A",
+      "price": "N/A",
+      "change": "0.00",
+      "updated_at": "--"
+    }
+  },
+  "ANGELONE": {
+    "count": 1,
+    "last_searched_at": "07:56:12 IST",
+    "fallback": {
+      "name": "Angel One Limited",
+      "sector": "Financial Services",
+      "price": "337.70",
+      "change": "0.88",
+      "updated_at": "08:01:00 IST"
+    },
+    "last_updated_at": "08:01:00 IST"
+  },
+  "ETERNAL": {
+    "count": 1,
+    "last_searched_at": "07:57:18 IST",
+    "fallback": {
+      "name": "ETERNAL",
+      "sector": "N/A",
+      "price": "N/A",
+      "change": "0.00",
+      "updated_at": "--"
+    }
+  },
+  "HCC": {
+    "count": 1,
+    "last_searched_at": "07:58:44 IST",
+    "fallback": {
+      "name": "HCC",
+      "sector": "N/A",
+      "price": "N/A",
+      "change": "0.00",
+      "updated_at": "--"
+    }
+  },
+  "IRCTC": {
+    "count": 1,
+    "last_searched_at": "08:00:57 IST",
+    "fallback": {
+      "name": "IRCTC",
+      "sector": "N/A",
+      "price": "N/A",
+      "change": "0.00",
+      "updated_at": "--"
+    }
   }
 }
