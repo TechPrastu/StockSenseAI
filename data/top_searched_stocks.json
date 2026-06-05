@@ -7,9 +7,9 @@
       "sector": "Technology",
       "price": "2241.00",
       "change": "-0.03",
-      "updated_at": "08:01:00 IST"
+      "updated_at": "08:29:00 IST"
     },
-    "last_updated_at": "08:01:00 IST"
+    "last_updated_at": "08:29:00 IST"
   },
   "INFY": {
     "count": 3,
@@ -19,9 +19,9 @@
       "sector": "Technology",
       "price": "1201.30",
       "change": "-1.74",
-      "updated_at": "08:01:00 IST"
+      "updated_at": "08:29:08 IST"
     },
-    "last_updated_at": "08:01:00 IST"
+    "last_updated_at": "08:29:08 IST"
   },
   "RELIANCE": {
     "count": 1,
@@ -43,9 +43,9 @@
       "sector": "Financial Services",
       "price": "4033.40",
       "change": "1.70",
-      "updated_at": "08:01:00 IST"
+      "updated_at": "08:29:05 IST"
     },
-    "last_updated_at": "08:01:00 IST"
+    "last_updated_at": "08:29:05 IST"
   },
   "CDSL": {
     "count": 1,
